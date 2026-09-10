@@ -1,0 +1,28 @@
+# contextpack project rules
+
+## Using contextpack for codebase context
+
+Before large refactors or when you need orientation on this codebase:
+
+```bash
+contextpack pack . --budget 8000 -o context.md
+```
+
+This generates a token-budgeted digest with prioritized file contents.
+
+## Key directories
+
+- `src/` — TypeScript source
+- `tests/` — Vitest tests
+- `docs/` — Documentation
+- `fixtures/` — Demo fixtures
+
+## Development
+
+```bash
+npm install
+npm test
+npm run build
+```
+
+Run tests before committing changes.

@@ -1,22 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { pack } from "./pack/pack.js";
 import { formatPack } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
 import type { OutputFormat } from "./types.js";
 
-const VERSION = "0.1.0";
+function getVersion(): string {
+  try {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const pkgPath = path.resolve(__dirname, "../package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { version: string };
+    return pkg.version;
+  } catch {
+    return "0.1.0";
+  }
+}
+
+const VERSION = getVersion();
+const DEFAULT_BUDGET = 16000;
 
 export function createProgram(): Command {
   const program = new Command();
 
   program
     .name("contextpack")
-    .description(
-      "Pack a codebase into clean, token-budgeted context for humans and AI coding agents.",
-    )
-    .version(VERSION);
+    .description("Don't dump the repo into the model. Pack what matters.")
+    .version(VERSION, "-V, --version", "print version");
 
   program
     .command("pack")
@@ -24,8 +35,9 @@ export function createProgram(): Command {
     .argument("[path]", "directory to pack", ".")
     .option(
       "-b, --budget <tokens>",
-      "max approximate tokens (chars÷4 estimate). Omit for no budget.",
+      `max approximate tokens (chars÷4). Default: ${DEFAULT_BUDGET}. Use 0 for unlimited.`,
       parseBudget,
+      DEFAULT_BUDGET,
     )
     .option(
       "-f, --format <format>",
@@ -62,14 +74,16 @@ export function createProgram(): Command {
       "after",
       `
 Examples:
-  $ contextpack pack .
-  $ contextpack pack ./src --budget 8000 --format md
-  $ contextpack pack . --budget 12000 --format json --out context.json
-  $ contextpack pack . --ignore '*.generated.ts' --include 'dist/schema.json'
+  $ contextpack pack .                          # Pack with default budget (${DEFAULT_BUDGET} tokens)
+  $ contextpack pack ./src --budget 8000        # Custom budget
+  $ contextpack pack . --budget 0               # No budget (include all)
+  $ contextpack pack . -o context.md            # Write to file
+  $ contextpack pack . --format json            # JSON output
+  $ contextpack pack . --ignore 'tests/**'      # Skip tests
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
-  Respects .gitignore plus built-in ignores (node_modules, lockfiles, binaries, media, secrets).
+  Respects .gitignore plus built-in ignores (node_modules, lockfiles, binaries, secrets).
 `,
     )
     .action((targetPath: string, opts) => {
@@ -80,7 +94,7 @@ Notes:
 }
 
 interface PackCliOpts {
-  budget?: number;
+  budget: number;
   format: OutputFormat;
   out?: string;
   ignore: string[];
@@ -105,8 +119,10 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     return;
   }
 
+  const effectiveBudget = opts.budget === 0 ? null : opts.budget;
+
   const result = pack(root, {
-    budget: opts.budget ?? null,
+    budget: effectiveBudget,
     ignore: opts.ignore,
     include: opts.include,
     maxFileBytes: opts.maxFileBytes,
@@ -119,30 +135,43 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, output, "utf8");
     if (!opts.quiet) {
-      console.error(
-        `wrote ${outPath}  (${result.stats.included} files, ~${formatTokenCount(result.totalTokens)} tokens)`,
-      );
+      printSummary(result, outPath);
     }
   } else {
     process.stdout.write(output);
     if (!output.endsWith("\n")) process.stdout.write("\n");
+    if (!opts.quiet) {
+      printSummary(result, null);
+    }
+  }
+}
+
+function printSummary(result: import("./types.js").PackResult, outPath: string | null): void {
+  const parts: string[] = [];
+
+  if (outPath) {
+    parts.push(`wrote ${outPath}`);
   }
 
-  if (!opts.quiet && opts.out == null) {
-    // Summary on stderr so stdout stays pure digest when piping
-    console.error(
-      `contextpack: ${result.stats.included} files, ~${formatTokenCount(result.totalTokens)} tokens` +
-        (result.budget != null ? ` / budget ${result.budget}` : "") +
-        (result.stats.truncated ? `, ${result.stats.truncated} truncated` : "") +
-        (result.stats.ignored ? `, ${result.stats.ignored} ignored` : ""),
-    );
+  parts.push(`${result.stats.included} files`);
+  parts.push(`~${formatTokenCount(result.totalTokens)} tokens`);
+
+  if (result.budget != null) {
+    const pct = Math.round((result.totalTokens / result.budget) * 100);
+    parts.push(`${pct}% of ${formatTokenCount(result.budget)} budget`);
   }
+
+  if (result.stats.truncated > 0) {
+    parts.push(`${result.stats.truncated} truncated`);
+  }
+
+  console.error(`contextpack: ${parts.join(" · ")}`);
 }
 
 function parseBudget(value: string): number {
   const n = Number(value);
-  if (!Number.isFinite(n) || n < 1) {
-    throw new Error(`Invalid --budget: ${value} (expected positive number)`);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`Invalid --budget: ${value} (expected non-negative number)`);
   }
   return Math.floor(n);
 }

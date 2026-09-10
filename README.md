@@ -1,97 +1,88 @@
 # contextpack
 
-**Pack any repo into clean, token-budgeted context — for humans and AI.**
+> Don't dump the repo into the model. Pack what matters.
 
-`contextpack` turns a codebase into a focused digest you can **read**, **share**, or **feed to a coding agent / LLM** without dumping noise (`node_modules`, build artifacts, lockfile spam, binaries, secrets).
-
-It is a practical CLI, not a demo: ignore rules, approximate token budgets, and formats meant for both people and machines.
-
-## Why
-
-| Audience | What you get |
-| --- | --- |
-| **Humans** | A readable map of what matters (onboarding, reviews, handoffs, “what changed in this tree?”). |
-| **AI / agents** | Budgeted, structured context instead of raw recursive file dumps that blow the window. |
+A CLI that turns a codebase into a focused, token-budgeted digest—for humans reviewing code and AI agents that need context without the noise.
 
 ## Install
 
 ```bash
-# one-shot
-npx contextpack pack . --budget 8000 --format md
-
-# or global / local
-npm install -g contextpack
-# from a clone:
-npm install && npm run build && npm link
+npx contextpack pack .
 ```
 
-Requires **Node.js 18+**.
-
-## Quickstart
+Or install globally:
 
 ```bash
-# Markdown digest to stdout (summary on stderr)
+npm install -g contextpack
+```
+
+## Usage
+
+```bash
+# Pack current directory to stdout
 contextpack pack .
 
-# Cap approximate tokens and write a file
-contextpack pack ./src --budget 8000 --format md --out context.md
+# Budget to ~8k tokens, write to file
+contextpack pack ./src --budget 8000 -o context.md
 
-# JSON for tooling / agents
-contextpack pack . --budget 12000 --format json --out context.json
+# JSON output for tooling
+contextpack pack . --budget 12000 --format json -o context.json
 
-# Plain text
-contextpack pack . --format plain --out context.txt
+# Skip tests and fixtures
+contextpack pack . --ignore 'tests/**' --ignore 'fixtures/**'
 ```
 
-```bash
-contextpack pack --help
-```
+## What it does
 
-### Useful flags
+1. Walks the directory tree, respecting `.gitignore`
+2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
+3. Ranks files by signal (README and manifests first, tests last)
+4. Fits within your token budget, keeping the highest-value files
+5. Outputs a structured digest (Markdown, JSON, or plain text)
+
+## Flags
 
 | Flag | Description |
 | --- | --- |
 | `[path]` | Directory to pack (default: `.`) |
-| `-b, --budget <tokens>` | Max **approximate** tokens. Omit for no budget. |
-| `-f, --format <md\|json\|plain>` | Output format (default: `md`) |
+| `-b, --budget <n>` | Max tokens (~chars/4). Default: 16000. Use `0` for unlimited. |
+| `-f, --format <fmt>` | `md` (default), `json`, or `plain` |
 | `-o, --out <file>` | Write to file instead of stdout |
-| `-i, --ignore <pattern>` | Extra gitignore-style pattern (repeatable) |
-| `--include <pattern>` | Force-include (overrides ignores; repeatable) |
-| `--max-file-bytes <n>` | Skip files larger than N bytes (default: 512 KiB) |
+| `-i, --ignore <pat>` | Extra ignore pattern (repeatable) |
+| `--include <pat>` | Force-include pattern (repeatable) |
+| `--max-file-bytes <n>` | Skip files larger than N bytes (default: 512KB) |
 | `-q, --quiet` | Suppress stderr summary |
+| `-V, --version` | Print version |
 
-## What gets included / ignored
+## For AI coding agents
 
-By default, `contextpack`:
+contextpack is designed for both humans and AI agents. Before a large refactor or when you need codebase context:
 
-1. Reads the project’s root **`.gitignore`** (if present).
-2. Applies **built-in ignores**: VCS dirs, `node_modules`, lockfiles, build outputs, caches, binaries, archives, large media, common secret/env files, IDE junk.
-3. Keeps text-like source and docs (extension + light binary heuristic).
-4. Optionally applies a **token budget**, preferring high-signal paths (README, manifests, `src/`) over bulky tests/fixtures when space is tight.
+```bash
+# Get a digest of the codebase structure
+contextpack pack . --budget 8000 -o context.md
 
-Override with `--ignore` / `--include` as needed.
+# Then include context.md in your prompt
+```
+
+See [docs/agents.md](./docs/agents.md) for integration patterns.
 
 ## Token estimates
 
-Token counts are **estimates**: roughly `characters / 4`.
-
-That is good enough for budgeting and ranking. It is **not** a model-specific tokenizer (OpenAI, Anthropic, etc.) and should not be used for billing or exact context-window accounting. Digests state this explicitly.
+Token counts are **estimates**: `characters / 4`. This is good enough for budgeting and fits most tokenizers within ~20%. It is not a model-specific tokenizer—don't use it for billing or exact context window calculations.
 
 ## Output formats
 
-- **`md`** — Human-readable digest with summary table + fenced file sections (also works well as agent input).
-- **`json`** — Structured payload (`files[]`, stats, truncated list) for pipelines and tools.
-- **`plain`** — Simple separators, easy to paste or pipe.
+- **md** — Markdown digest with summary table and fenced code blocks. Readable by humans, parseable by agents.
+- **json** — Structured payload with file contents, stats, and metadata. For pipelines and tooling.
+- **plain** — Simple separators. Easy to paste or pipe.
 
-## Library usage
+## Philosophy
 
-```ts
-import { pack } from "contextpack/pack";
-// or after build: from "./dist/pack/pack.js"
-
-const result = pack(".", { budget: 8000 });
-console.log(result.files.map((f) => f.path));
-```
+- **Pack what matters.** README, manifests, source files. Not lockfiles, not `node_modules`, not binaries.
+- **Respect budgets.** When space is tight, prioritize high-signal files over test fixtures.
+- **Stay honest.** Token counts are estimates. We say so.
+- **Work for both audiences.** Humans need readable digests. Agents need structured context. Same tool.
 
 ## Project layout
 
@@ -99,19 +90,15 @@ console.log(result.files.map((f) => f.path));
 src/
   cli.ts              # Commander CLI
   index.ts            # bin entry
-  types.ts
-  ignore/defaults.ts  # built-in ignore + text heuristics
   pack/
-    collect.ts        # walk + gitignore
-    budget.ts         # priority + token budget selection
-    tokens.ts         # chars/4 estimate
-    format.ts         # md | json | plain
-    pack.ts           # orchestrator (collect → select)
-tests/                # vitest
-.github/workflows/ci.yml
+    collect.ts        # Walk + gitignore
+    budget.ts         # Priority ranking + selection
+    tokens.ts         # Token estimation
+    format.ts         # md | json | plain output
+    pack.ts           # Orchestrator
+  ignore/defaults.ts  # Built-in ignore patterns
+tests/                # Vitest
 ```
-
-Designed so daily improvements (better ranking, streaming, language-aware chunking) plug into `collect` / `budget` / `format` without rewriting the CLI.
 
 ## Development
 
@@ -121,14 +108,11 @@ cd contextpack
 npm install
 npm test
 npm run build
-node dist/index.js pack . --budget 4000
 ```
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Status
 
-**v0.1** — usable CLI: pack / ignore / budget / formats, tests, CI. Expect ranking and ignore defaults to evolve; feedback welcome.
+**v0.1** — CLI works: pack, ignore, budget, formats. Tests pass. Expect ranking heuristics and ignore defaults to evolve.
 
 ## License
 
