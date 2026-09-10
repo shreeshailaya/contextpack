@@ -15,6 +15,18 @@ npm install -g @shree_vitkar/contextpack
 contextpack pack .
 ```
 
+### Windows
+
+On Windows, use `npx` to avoid PATH issues:
+
+```cmd
+npx -p @shree_vitkar/contextpack contextpack pack .
+```
+
+If you install globally and `contextpack` is not recognized, add your npm prefix (`npm config get prefix`, usually `%AppData%\npm`) to your User PATH, then restart your terminal. See the [main README](../README.md#windows) for detailed steps.
+
+> **Note:** The package is scoped `@shree_vitkar/contextpack` but the CLI binary name is `contextpack`.
+
 ## When to use contextpack
 
 Use contextpack when an agent needs:
