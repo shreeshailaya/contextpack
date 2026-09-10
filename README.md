@@ -17,6 +17,44 @@ npm install -g @shree_vitkar/contextpack
 contextpack pack .
 ```
 
+### Windows
+
+The recommended approach on Windows is using `npx`, which requires no PATH configuration:
+
+```cmd
+npx -p @shree_vitkar/contextpack contextpack pack .
+```
+
+To install globally:
+
+```cmd
+npm install -g @shree_vitkar/contextpack
+contextpack pack .
+```
+
+**If `contextpack` is not recognized after global install:**
+
+1. Find your npm global bin directory:
+   ```cmd
+   npm config get prefix
+   ```
+   This is usually `%AppData%\npm` (e.g., `C:\Users\YourName\AppData\Roaming\npm`).
+
+2. Add that path to your User PATH environment variable:
+   - Press `Win + R`, type `sysdm.cpl`, press Enter
+   - Go to **Advanced** → **Environment Variables**
+   - Under **User variables**, edit **Path** and add the npm prefix path
+
+3. Restart your terminal (CMD, PowerShell, or Git Bash).
+
+4. Verify the CLI wrapper exists:
+   ```cmd
+   dir "%AppData%\npm\contextpack*"
+   ```
+   You should see `contextpack` and `contextpack.cmd`.
+
+> **Note:** The package is scoped `@shree_vitkar/contextpack` but the CLI binary name is `contextpack`.
+
 ## Usage
 
 ```bash
