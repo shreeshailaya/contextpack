@@ -5,16 +5,15 @@
 ## Install
 
 ```bash
-npx @shree_vitkar/contextpack pack .
+npx -p @shree_vitkar/contextpack contextpack pack .
 ```
 
 Or install globally:
 
 ```bash
 npm install -g @shree_vitkar/contextpack
+contextpack pack .
 ```
-
-Then run `contextpack` from anywhere.
 
 ## When to use contextpack
 
