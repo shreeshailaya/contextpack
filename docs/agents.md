@@ -1,6 +1,20 @@
 # Using contextpack with AI coding agents
 
-contextpack generates token-budgeted codebase digests that fit cleanly in an LLM context window. This makes it useful for AI coding agents that need to understand a codebase before making changes.
+[contextpack](https://www.npmjs.com/package/@shree_vitkar/contextpack) generates token-budgeted codebase digests that fit cleanly in an LLM context window. This makes it useful for AI coding agents that need to understand a codebase before making changes.
+
+## Install
+
+```bash
+npx @shree_vitkar/contextpack pack .
+```
+
+Or install globally:
+
+```bash
+npm install -g @shree_vitkar/contextpack
+```
+
+Then run `contextpack` from anywhere.
 
 ## When to use contextpack
 
