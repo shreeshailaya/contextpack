@@ -1,0 +1,60 @@
+{
+  "name": "contextpack",
+  "version": "0.1.0",
+  "description": "Pack any repo into clean, token-budgeted context for humans and AI coding agents.",
+  "type": "module",
+  "bin": {
+    "contextpack": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./pack": "./dist/pack/pack.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "cli",
+    "context",
+    "llm",
+    "ai",
+    "coding-agent",
+    "digest",
+    "token-budget",
+    "gitignore"
+  ],
+  "author": "Shreeshail Vitkar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeshailaya/contextpack.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shreeshailaya/contextpack/issues"
+  },
+  "homepage": "https://github.com/shreeshailaya/contextpack#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "ignore": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

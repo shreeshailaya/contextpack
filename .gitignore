@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Coverage / test
+coverage/
+.nyc_output/
+
+# Logs / caches
+*.log
+npm-debug.log*
+.DS_Store
+.cache/
+.turbo/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Pack outputs (local experiments)
+*.context.md
+*.context.json
+*.context.txt
