@@ -44,6 +44,10 @@
     "url": "https://github.com/shreeshailaya/contextpack/issues"
   },
   "homepage": "https://github.com/shreeshailaya/contextpack#readme",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=18"
   },
