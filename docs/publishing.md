@@ -7,7 +7,7 @@ This package uses npm trusted publishing (OIDC) to publish to npm without requir
 Configure trusted publishing on npmjs.com:
 
 1. Go to [npmjs.com](https://www.npmjs.com/) and sign in
-2. Navigate to the **contextpack** package settings (or use "Add Trusted Publisher" if the package doesn't exist yet)
+2. Navigate to the **@shree_vitkar/contextpack** package settings (or use "Add Trusted Publisher" if the package doesn't exist yet)
 3. Under **Publishing access**, select **Trusted Publishers**
 4. Configure the GitHub Actions publisher:
    - **Organization or user:** `shreeshailaya`

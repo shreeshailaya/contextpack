@@ -8,6 +8,20 @@ A CLI tool that packs a codebase into a token-budgeted digest. Useful for:
 - Humans reviewing or onboarding to a codebase
 - AI agents that need codebase context before making changes
 
+## Install
+
+```bash
+npx @shree_vitkar/contextpack pack .
+```
+
+Or install globally:
+
+```bash
+npm install -g @shree_vitkar/contextpack
+```
+
+Then run `contextpack` from anywhere.
+
 ## Using contextpack as an agent
 
 Before large refactors or when you need codebase orientation:

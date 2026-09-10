@@ -7,14 +7,16 @@ A CLI that turns a codebase into a focused, token-budgeted digest—for humans r
 ## Install
 
 ```bash
-npx contextpack pack .
+npx @shree_vitkar/contextpack pack .
 ```
 
 Or install globally:
 
 ```bash
-npm install -g contextpack
+npm install -g @shree_vitkar/contextpack
 ```
+
+Then run `contextpack` from anywhere.
 
 ## Usage
 
