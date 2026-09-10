@@ -1,0 +1,1 @@
+CI workflow pending: needs `gh auth refresh -h github.com -s workflow` then push `.github/workflows/ci.yml`.
