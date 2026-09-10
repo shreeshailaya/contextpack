@@ -11,16 +11,15 @@ A CLI tool that packs a codebase into a token-budgeted digest. Useful for:
 ## Install
 
 ```bash
-npx @shree_vitkar/contextpack pack .
+npx -p @shree_vitkar/contextpack contextpack pack .
 ```
 
 Or install globally:
 
 ```bash
 npm install -g @shree_vitkar/contextpack
+contextpack pack .
 ```
-
-Then run `contextpack` from anywhere.
 
 ## Using contextpack as an agent
 
