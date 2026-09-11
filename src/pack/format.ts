@@ -30,6 +30,10 @@ function formatMarkdown(result: PackResult): string {
   }
   lines.push(`| Discovered | ${result.stats.discovered} |`);
   lines.push(`| Ignored | ${result.stats.ignored} |`);
+  const partialCount = result.files.filter((f) => f.partial).length;
+  if (partialCount > 0) {
+    lines.push(`| Partial (prefix only) | ${partialCount} |`);
+  }
   if (result.stats.truncated > 0) {
     lines.push(`| Truncated (over budget) | ${result.stats.truncated} |`);
   }
@@ -42,7 +46,8 @@ function formatMarkdown(result: PackResult): string {
   lines.push(`## Files`);
   lines.push("");
   for (const f of result.files) {
-    lines.push(`- \`${f.path}\` (~${formatTokenCount(f.tokens)} tok)`);
+    const partialMarker = f.partial ? " [partial]" : "";
+    lines.push(`- \`${f.path}\` (~${formatTokenCount(f.tokens)} tok)${partialMarker}`);
   }
   lines.push("");
   lines.push(`---`);
@@ -50,11 +55,16 @@ function formatMarkdown(result: PackResult): string {
 
   for (const f of result.files) {
     const lang = fenceLang(f.path);
-    lines.push(`## ${f.path}`);
+    const partialSuffix = f.partial ? " [partial]" : "";
+    lines.push(`## ${f.path}${partialSuffix}`);
     lines.push("");
     lines.push("```" + lang);
     lines.push(f.content.replace(/\n$/, ""));
     lines.push("```");
+    if (f.partial) {
+      lines.push("");
+      lines.push("> **Note:** This file was truncated to fit the token budget. Only a prefix is shown.");
+    }
     lines.push("");
   }
 
@@ -81,8 +91,12 @@ function formatPlain(result: PackResult): string {
   lines.push("");
 
   for (const f of result.files) {
-    lines.push(`===== ${f.path} (~${f.tokens} tok) =====`);
+    const partialMarker = f.partial ? " [partial]" : "";
+    lines.push(`===== ${f.path} (~${f.tokens} tok)${partialMarker} =====`);
     lines.push(f.content.replace(/\n$/, ""));
+    if (f.partial) {
+      lines.push("[... truncated to fit budget ...]");
+    }
     lines.push("");
   }
 
@@ -108,6 +122,7 @@ function formatJson(result: PackResult): string {
         path: f.path,
         tokens: f.tokens,
         bytes: f.bytes,
+        partial: f.partial ?? false,
         content: f.content,
       })),
     },

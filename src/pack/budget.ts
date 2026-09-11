@@ -3,6 +3,12 @@ import type { PackedFile } from "../types.js";
 import type { CollectedFile } from "./collect.js";
 import { readTextFile } from "./collect.js";
 
+/**
+ * Minimum remaining budget (in tokens) required to attempt partial file inclusion.
+ * Below this threshold, including a partial file produces too little useful content.
+ */
+const PARTIAL_INCLUSION_MIN_TOKENS = 100;
+
 export interface BudgetSelection {
   files: PackedFile[];
   truncated: string[];
@@ -84,23 +90,58 @@ export function selectUnderBudget(
   const files: PackedFile[] = [];
   const truncated: string[] = [];
   let totalTokens = 0;
+  let budgetExhausted = false;
 
   for (const item of prepared) {
-    if (totalTokens + item.tokens > budget) {
+    if (budgetExhausted) {
       truncated.push(item.meta.relPath);
       continue;
     }
-    files.push({
-      path: item.meta.relPath,
-      content: item.content,
-      tokens: item.tokens,
-      bytes: Buffer.byteLength(item.content, "utf8"),
-    });
-    totalTokens += item.tokens;
+
+    if (totalTokens + item.tokens <= budget) {
+      files.push({
+        path: item.meta.relPath,
+        content: item.content,
+        tokens: item.tokens,
+        bytes: Buffer.byteLength(item.content, "utf8"),
+      });
+      totalTokens += item.tokens;
+    } else {
+      const remainingTokens = budget - totalTokens;
+
+      if (remainingTokens >= PARTIAL_INCLUSION_MIN_TOKENS) {
+        const partialContent = sliceToTokenBudget(item.content, remainingTokens);
+        const partialTokens = estimateTokens(partialContent);
+
+        files.push({
+          path: item.meta.relPath,
+          content: partialContent,
+          tokens: partialTokens,
+          bytes: Buffer.byteLength(partialContent, "utf8"),
+          partial: true,
+        });
+        totalTokens += partialTokens;
+      }
+
+      truncated.push(item.meta.relPath);
+      budgetExhausted = true;
+    }
   }
 
   // Present included files in path order for readable digests
   files.sort((a, b) => a.path.localeCompare(b.path));
 
   return { files, truncated, skipped, totalTokens };
+}
+
+/**
+ * Slice content to fit approximately within a token budget.
+ * Uses the same estimate as the rest of the codebase: chars / 4.
+ */
+function sliceToTokenBudget(content: string, tokenBudget: number): string {
+  const charBudget = tokenBudget * 4;
+  if (content.length <= charBudget) {
+    return content;
+  }
+  return content.slice(0, charBudget);
 }

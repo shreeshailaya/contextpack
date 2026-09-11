@@ -1,6 +1,6 @@
 {
   "name": "@shree_vitkar/contextpack",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Pack any repo into clean, token-budgeted context for humans and AI coding agents.",
   "type": "module",
   "bin": {
