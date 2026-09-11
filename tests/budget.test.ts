@@ -55,11 +55,16 @@ describe("pack budget", () => {
     const paths = result.files.map((f) => f.path);
     expect(paths).toContain("README.md");
     expect(paths).toContain("src/small.ts");
-    // huge test file should often be truncated under tight-ish budget preferring src
-    // With budget == hugeTokens, README+src may fit and leave huge out, or huge alone if selected first.
-    // Priority puts README/src before tests, so huge should be truncated.
+    // huge test file should be truncated (not fully fit) under tight-ish budget preferring src
+    // With partial inclusion, it may appear in files with partial=true AND in truncated list
     expect(result.truncated).toContain("tests/huge.test.ts");
-    expect(paths).not.toContain("tests/huge.test.ts");
+
+    // If the file is included, it should be marked as partial (not fully included)
+    const hugeFile = result.files.find((f) => f.path === "tests/huge.test.ts");
+    if (hugeFile) {
+      expect(hugeFile.partial).toBe(true);
+      expect(hugeFile.content.length).toBeLessThan(big.length);
+    }
   });
 
   it("never exceeds the token budget for included content", () => {
@@ -74,5 +79,106 @@ describe("pack budget", () => {
     expect(result.totalTokens).toBeLessThanOrEqual(budget);
     const sum = result.files.reduce((s, f) => s + f.tokens, 0);
     expect(sum).toBe(result.totalTokens);
+  });
+
+  it("partially includes a file when it does not fully fit but budget remains", () => {
+    const smallContent = "# Small\n";
+    const largeContent = "x".repeat(2000);
+
+    const root = tmpProject({
+      "README.md": smallContent,
+      "src/large.ts": largeContent,
+    });
+
+    const smallTokens = estimateTokens(smallContent);
+    const budget = smallTokens + 200;
+
+    const result = pack(root, { budget });
+
+    expect(result.totalTokens).toBeLessThanOrEqual(budget);
+
+    const readme = result.files.find((f) => f.path === "README.md");
+    expect(readme).toBeDefined();
+    expect(readme?.partial).toBeFalsy();
+
+    const large = result.files.find((f) => f.path === "src/large.ts");
+    expect(large).toBeDefined();
+    expect(large?.partial).toBe(true);
+    expect(large!.content.length).toBeLessThan(largeContent.length);
+    expect(large!.tokens).toBeLessThanOrEqual(200);
+
+    expect(result.truncated).toContain("src/large.ts");
+  });
+
+  it("skips partial inclusion when remaining budget is below minimum threshold", () => {
+    const smallContent = "# Small\n";
+    const largeContent = "x".repeat(2000);
+
+    const root = tmpProject({
+      "README.md": smallContent,
+      "src/large.ts": largeContent,
+    });
+
+    const smallTokens = estimateTokens(smallContent);
+    const budget = smallTokens + 50;
+
+    const result = pack(root, { budget });
+
+    expect(result.totalTokens).toBeLessThanOrEqual(budget);
+
+    const readme = result.files.find((f) => f.path === "README.md");
+    expect(readme).toBeDefined();
+
+    const large = result.files.find((f) => f.path === "src/large.ts");
+    expect(large).toBeUndefined();
+
+    expect(result.truncated).toContain("src/large.ts");
+  });
+
+  it("only partially includes the first file that does not fit", () => {
+    const smallContent = "# Small\n";
+    const mediumContent = "y".repeat(800);
+    const largeContent = "x".repeat(2000);
+
+    const root = tmpProject({
+      "README.md": smallContent,
+      "src/medium.ts": mediumContent,
+      "src/large.ts": largeContent,
+    });
+
+    const smallTokens = estimateTokens(smallContent);
+    const budget = smallTokens + 150;
+
+    const result = pack(root, { budget });
+
+    expect(result.totalTokens).toBeLessThanOrEqual(budget);
+
+    const partialFiles = result.files.filter((f) => f.partial);
+    expect(partialFiles.length).toBeLessThanOrEqual(1);
+
+    const large = result.files.find((f) => f.path === "src/large.ts");
+    if (large) {
+      expect(large.partial).toBe(true);
+    }
+
+    expect(result.truncated.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("marks partial files in output formats", () => {
+    const smallContent = "# Small\n";
+    const largeContent = "x".repeat(2000);
+
+    const root = tmpProject({
+      "README.md": smallContent,
+      "src/large.ts": largeContent,
+    });
+
+    const smallTokens = estimateTokens(smallContent);
+    const budget = smallTokens + 200;
+
+    const result = pack(root, { budget });
+
+    const large = result.files.find((f) => f.path === "src/large.ts");
+    expect(large?.partial).toBe(true);
   });
 });

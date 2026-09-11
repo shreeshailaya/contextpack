@@ -77,7 +77,8 @@ contextpack pack . --ignore 'tests/**' --ignore 'fixtures/**'
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
 3. Ranks files by signal (README and manifests first, tests last)
 4. Fits within your token budget, keeping the highest-value files
-5. Outputs a structured digest (Markdown, JSON, or plain text)
+5. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
+6. Outputs a structured digest (Markdown, JSON, or plain text)
 
 ## Flags
 
@@ -119,8 +120,8 @@ Token counts are **estimates**: `characters / 4`. This is good enough for budget
 ## Philosophy
 
 - **Pack what matters.** README, manifests, source files. Not lockfiles, not `node_modules`, not binaries.
-- **Respect budgets.** When space is tight, prioritize high-signal files over test fixtures.
-- **Stay honest.** Token counts are estimates. We say so.
+- **Respect budgets.** When space is tight, prioritize high-signal files over test fixtures. When a high-priority file doesn't fully fit, include what does (partial inclusion) rather than losing it entirely.
+- **Stay honest.** Token counts are estimates (`chars / 4`). We say so. Partial files are clearly marked.
 - **Work for both audiences.** Humans need readable digests. Agents need structured context. Same tool.
 
 ## Project layout

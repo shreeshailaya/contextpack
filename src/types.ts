@@ -11,6 +11,8 @@ export interface PackedFile {
   tokens: number;
   /** Byte length of content. */
   bytes: number;
+  /** True if the file was partially included due to budget constraints. */
+  partial?: boolean;
 }
 
 /** Result of a pack operation. */
