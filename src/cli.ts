@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { pack } from "./pack/pack.js";
-import { formatPack } from "./pack/format.js";
+import { formatPack, formatList } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
-import type { OutputFormat } from "./types.js";
+import type { OutputFormat, ListFormat } from "./types.js";
 
 function getVersion(): string {
   try {
@@ -70,6 +70,7 @@ export function createProgram(): Command {
       },
     )
     .option("-q, --quiet", "suppress stderr summary", false)
+    .option("-l, --list", "preview which files would be included (dry-run)", false)
     .addHelpText(
       "after",
       `
@@ -80,6 +81,8 @@ Examples:
   $ contextpack pack . -o context.md            # Write to file
   $ contextpack pack . --format json            # JSON output
   $ contextpack pack . --ignore 'tests/**'      # Skip tests
+  $ contextpack pack . --list                   # Preview files without dumping contents
+  $ contextpack pack . --list --format json     # JSON preview for agents
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
@@ -101,6 +104,7 @@ interface PackCliOpts {
   include: string[];
   maxFileBytes?: number;
   quiet?: boolean;
+  list?: boolean;
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -127,6 +131,27 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     include: opts.include,
     maxFileBytes: opts.maxFileBytes,
   });
+
+  if (opts.list) {
+    const listFormat: ListFormat = opts.format === "json" ? "json" : "plain";
+    const output = formatList(result, listFormat);
+
+    if (opts.out) {
+      const outPath = path.resolve(opts.out);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, output, "utf8");
+      if (!opts.quiet) {
+        printListSummary(result, outPath);
+      }
+    } else {
+      process.stdout.write(output);
+      if (!output.endsWith("\n")) process.stdout.write("\n");
+      if (!opts.quiet) {
+        printListSummary(result, null);
+      }
+    }
+    return;
+  }
 
   const output = formatPack(result, opts.format);
 
@@ -166,6 +191,24 @@ function printSummary(result: import("./types.js").PackResult, outPath: string |
   }
 
   console.error(`contextpack: ${parts.join(" · ")}`);
+}
+
+function printListSummary(result: import("./types.js").PackResult, outPath: string | null): void {
+  const parts: string[] = [];
+
+  if (outPath) {
+    parts.push(`wrote preview to ${outPath}`);
+  }
+
+  parts.push(`${result.stats.included} would be included`);
+  parts.push(`~${formatTokenCount(result.totalTokens)} tokens`);
+
+  if (result.budget != null) {
+    const pct = Math.round((result.totalTokens / result.budget) * 100);
+    parts.push(`${pct}% of ${formatTokenCount(result.budget)} budget`);
+  }
+
+  console.error(`contextpack --list: ${parts.join(" · ")}`);
 }
 
 function parseBudget(value: string): number {

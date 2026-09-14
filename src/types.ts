@@ -1,6 +1,9 @@
 /** Output formats supported by contextpack. */
 export type OutputFormat = "md" | "json" | "plain";
 
+/** Output formats for --list preview (plain text table or json). */
+export type ListFormat = "plain" | "json";
+
 /** A single file selected for inclusion in a pack. */
 export interface PackedFile {
   /** Path relative to the pack root. */
