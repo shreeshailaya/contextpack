@@ -34,6 +34,7 @@ Use contextpack when an agent needs:
 - **Codebase orientation** — Understanding project structure, dependencies, and conventions before a task
 - **Refactor context** — Seeing which files exist and how they relate before a large change
 - **Review preparation** — Getting a snapshot of what changed or what exists in a directory
+- **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
 
 ## Basic usage
 
@@ -46,6 +47,20 @@ contextpack pack . --budget 8000 -o context.md
 # - Prioritized file contents (README, manifests, src/ first)
 # - Summary stats
 ```
+
+## Preview before packing
+
+Use `--list` to see which files would be included under a budget without dumping content:
+
+```bash
+# Preview files that fit in 8k tokens
+contextpack pack . --list --budget 8000
+
+# JSON format for programmatic access
+contextpack pack . --list --format json --budget 8000
+```
+
+This is useful for agents to plan context before committing to a pack, or to tune budget honestly.
 
 ## Integration patterns
 

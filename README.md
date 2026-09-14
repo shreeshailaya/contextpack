@@ -69,6 +69,9 @@ contextpack pack . --budget 12000 --format json -o context.json
 
 # Skip tests and fixtures
 contextpack pack . --ignore 'tests/**' --ignore 'fixtures/**'
+
+# Preview which files would be included (dry-run)
+contextpack pack . --list --budget 8000
 ```
 
 ## What it does
@@ -91,6 +94,7 @@ contextpack pack . --ignore 'tests/**' --ignore 'fixtures/**'
 | `-i, --ignore <pat>` | Extra ignore pattern (repeatable) |
 | `--include <pat>` | Force-include pattern (repeatable) |
 | `--max-file-bytes <n>` | Skip files larger than N bytes (default: 512KB) |
+| `-l, --list` | Preview which files would be included without dumping contents |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 

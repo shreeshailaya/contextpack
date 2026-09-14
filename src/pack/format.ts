@@ -1,4 +1,4 @@
-import type { OutputFormat, PackResult } from "../types.js";
+import type { OutputFormat, PackResult, ListFormat } from "../types.js";
 import { formatTokenCount } from "./tokens.js";
 
 export function formatPack(result: PackResult, format: OutputFormat): string {
@@ -171,4 +171,129 @@ function fenceLang(filePath: string): string {
     svelte: "svelte",
   };
   return map[ext.toLowerCase()] ?? "";
+}
+
+/** Status for each file in list preview. */
+export type ListFileStatus = "included" | "partial" | "truncated" | "skipped";
+
+export interface ListEntry {
+  path: string;
+  tokens: number;
+  status: ListFileStatus;
+}
+
+export interface ListPreview {
+  root: string;
+  budget: number | null;
+  entries: ListEntry[];
+  summary: {
+    included: number;
+    partial: number;
+    truncated: number;
+    skipped: number;
+    totalTokens: number;
+    discovered: number;
+    ignored: number;
+  };
+}
+
+function buildListPreview(result: PackResult): ListPreview {
+  const entries: ListEntry[] = [];
+  const partialPaths = new Set<string>();
+
+  for (const f of result.files) {
+    if (f.partial) {
+      partialPaths.add(f.path);
+      entries.push({ path: f.path, tokens: f.tokens, status: "partial" });
+    } else {
+      entries.push({ path: f.path, tokens: f.tokens, status: "included" });
+    }
+  }
+
+  for (const p of result.truncated) {
+    if (!partialPaths.has(p)) {
+      entries.push({ path: p, tokens: 0, status: "truncated" });
+    }
+  }
+
+  for (const p of result.skipped) {
+    entries.push({ path: p, tokens: 0, status: "skipped" });
+  }
+
+  const partialCount = result.files.filter((f) => f.partial).length;
+
+  return {
+    root: result.root,
+    budget: result.budget,
+    entries,
+    summary: {
+      included: result.stats.included - partialCount,
+      partial: partialCount,
+      truncated: result.stats.truncated,
+      skipped: result.stats.skipped,
+      totalTokens: result.totalTokens,
+      discovered: result.stats.discovered,
+      ignored: result.stats.ignored,
+    },
+  };
+}
+
+export function formatList(result: PackResult, format: ListFormat): string {
+  const preview = buildListPreview(result);
+
+  if (format === "json") {
+    return formatListJson(preview);
+  }
+  return formatListPlain(preview);
+}
+
+function formatListPlain(preview: ListPreview): string {
+  const lines: string[] = [];
+
+  lines.push(`contextpack --list preview`);
+  lines.push(`root: ${preview.root}`);
+  lines.push(
+    `budget: ${preview.budget != null ? formatTokenCount(preview.budget) : "unlimited"}`
+  );
+  lines.push(
+    `discovered: ${preview.summary.discovered} · ignored: ${preview.summary.ignored}`
+  );
+  lines.push("");
+
+  const maxPathLen = Math.max(...preview.entries.map((e) => e.path.length), 10);
+  const header = `${"PATH".padEnd(maxPathLen)}  ~TOKENS  STATUS`;
+  lines.push(header);
+  lines.push("-".repeat(header.length));
+
+  for (const entry of preview.entries) {
+    const tokStr = entry.tokens > 0 ? formatTokenCount(entry.tokens) : "-";
+    lines.push(
+      `${entry.path.padEnd(maxPathLen)}  ${tokStr.padStart(7)}  ${entry.status}`
+    );
+  }
+
+  lines.push("");
+  lines.push("-".repeat(header.length));
+  const parts: string[] = [];
+  if (preview.summary.included > 0) parts.push(`${preview.summary.included} included`);
+  if (preview.summary.partial > 0) parts.push(`${preview.summary.partial} partial`);
+  if (preview.summary.truncated > 0) parts.push(`${preview.summary.truncated} truncated`);
+  if (preview.summary.skipped > 0) parts.push(`${preview.summary.skipped} skipped`);
+  lines.push(`${parts.join(" · ")} · ~${formatTokenCount(preview.summary.totalTokens)} tokens`);
+
+  return lines.join("\n") + "\n";
+}
+
+function formatListJson(preview: ListPreview): string {
+  return JSON.stringify(
+    {
+      root: preview.root,
+      budget: preview.budget,
+      tokenEstimateNote: "approximate: characters / 4",
+      entries: preview.entries,
+      summary: preview.summary,
+    },
+    null,
+    2
+  );
 }
