@@ -34,6 +34,7 @@ Use contextpack when an agent needs:
 - **Codebase orientation** — Understanding project structure, dependencies, and conventions before a task
 - **Refactor context** — Seeing which files exist and how they relate before a large change
 - **Review preparation** — Getting a snapshot of what changed or what exists in a directory
+- **PR review context** — Use `--since main` to pack only files changed in a PR branch
 - **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
 
 ## Basic usage
@@ -109,6 +110,26 @@ contextpack pack . --budget 4000 --ignore 'tests/**' --ignore '**/*.test.ts'
 contextpack pack ./src/auth --budget 4000
 ```
 
+### Git-aware packing with --since
+
+Pack only files that changed since a git ref — useful for PR review and incremental context:
+
+```bash
+# Files changed since main branch (for PR review)
+contextpack pack . --since main --budget 8000
+
+# Files changed in the last commit
+contextpack pack . --since HEAD~1
+
+# Preview what changed without content
+contextpack pack . --since main --list
+
+# Combine with other options
+contextpack pack ./src --since main --budget 4000 --format json
+```
+
+This includes modified, added, and untracked files. Deleted files are skipped (nothing to pack). If the directory is not inside a git repo, or the ref is invalid, contextpack exits with an error.
+
 ## Budget guidelines
 
 | Task | Suggested budget |
@@ -147,6 +168,22 @@ contextpack pack ./src/middleware --budget 4000 -o middleware-context.md
 #    - Dependencies and types
 
 # 4. Agent makes informed changes
+```
+
+## Example: PR review workflow
+
+```bash
+# 1. Agent receives task: "Review the changes in this PR"
+
+# 2. Agent packs only changed files
+contextpack pack . --since main --budget 12000 -o changes.md
+
+# 3. Agent reviews the digest:
+#    - Sees only modified/added files
+#    - Understands the scope of changes
+#    - Can focus review on what's new
+
+# 4. Agent provides targeted feedback
 ```
 
 ## Tips

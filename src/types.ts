@@ -54,10 +54,14 @@ export interface PackOptions {
   maxFileBytes?: number;
   /** Prefer smaller / higher-signal files when budgeting. */
   prioritize?: boolean;
+  /** Only include files changed since this git ref. */
+  since?: string;
 }
 
 export interface CollectOptions {
   ignore?: string[];
   include?: string[];
   maxFileBytes?: number;
+  /** Only include files changed since this git ref. */
+  since?: string;
 }
