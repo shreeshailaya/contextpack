@@ -71,6 +71,10 @@ export function createProgram(): Command {
     )
     .option("-q, --quiet", "suppress stderr summary", false)
     .option("-l, --list", "preview which files would be included (dry-run)", false)
+    .option(
+      "-s, --since <ref>",
+      "only include files changed since git ref (e.g. main, HEAD~1, commit SHA)",
+    )
     .addHelpText(
       "after",
       `
@@ -83,10 +87,13 @@ Examples:
   $ contextpack pack . --ignore 'tests/**'      # Skip tests
   $ contextpack pack . --list                   # Preview files without dumping contents
   $ contextpack pack . --list --format json     # JSON preview for agents
+  $ contextpack pack . --since main             # Only files changed since main branch
+  $ contextpack pack . --since HEAD~1 --list    # Preview changes from last commit
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
   Respects .gitignore plus built-in ignores (node_modules, lockfiles, binaries, secrets).
+  --since requires git and a valid ref; includes modified, added, and untracked files.
 `,
     )
     .action((targetPath: string, opts) => {
@@ -105,6 +112,7 @@ interface PackCliOpts {
   maxFileBytes?: number;
   quiet?: boolean;
   list?: boolean;
+  since?: string;
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -125,12 +133,27 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
 
   const effectiveBudget = opts.budget === 0 ? null : opts.budget;
 
-  const result = pack(root, {
+  const packOptions = {
     budget: effectiveBudget,
     ignore: opts.ignore,
     include: opts.include,
     maxFileBytes: opts.maxFileBytes,
-  });
+    since: opts.since,
+  };
+
+  let result: import("./types.js").PackResult;
+
+  if (opts.since) {
+    const packResult = pack(root, packOptions as Parameters<typeof pack>[1] & { since: string });
+    if (!packResult.ok) {
+      console.error(`error: ${packResult.error.message}`);
+      process.exitCode = 1;
+      return;
+    }
+    result = packResult.value;
+  } else {
+    result = pack(root, packOptions);
+  }
 
   if (opts.list) {
     const listFormat: ListFormat = opts.format === "json" ? "json" : "plain";

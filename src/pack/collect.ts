@@ -6,6 +6,7 @@ import type { Ignore } from "ignore";
 // ignore CJS default export interop under NodeNext
 const ignore = ignoreImport as unknown as (options?: { ignoreCase?: boolean }) => Ignore;
 import { DEFAULT_IGNORES, TEXT_BASENAMES, TEXT_EXTENSIONS } from "../ignore/defaults.js";
+import { getChangedFilesSince } from "./git.js";
 import type { CollectOptions } from "../types.js";
 
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024; // 512 KiB
@@ -17,19 +18,48 @@ export interface CollectedFile {
   size: number;
 }
 
+export interface CollectResult {
+  files: CollectedFile[];
+  ignoredCount: number;
+}
+
+export interface CollectError {
+  code: string;
+  message: string;
+}
+
+export type CollectReturn = 
+  | { ok: true; value: CollectResult }
+  | { ok: false; error: CollectError };
+
 /**
  * Walk `root` and return candidate text files, respecting:
  * - root `.gitignore` (if present)
  * - DEFAULT_IGNORES
  * - extra `--ignore` patterns
  * - `--include` patterns that force-include matched paths
+ * - `--since` git ref filtering (only files changed since ref)
+ *
+ * If `options.since` is set and git operations fail, returns an error result.
  */
-export function collectFiles(root: string, options: CollectOptions = {}): {
-  files: CollectedFile[];
-  ignoredCount: number;
-} {
+export function collectFiles(root: string, options: CollectOptions = {}): CollectReturn {
   const absRoot = path.resolve(root);
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
+
+  let changedFiles: Set<string> | null = null;
+  if (options.since) {
+    const gitResult = getChangedFilesSince(absRoot, options.since);
+    if (!gitResult.ok) {
+      return {
+        ok: false,
+        error: {
+          code: gitResult.error.code,
+          message: gitResult.error.message,
+        },
+      };
+    }
+    changedFiles = gitResult.value.files;
+  }
 
   const ig = ignore();
   ig.add([...DEFAULT_IGNORES]);
@@ -55,12 +85,12 @@ export function collectFiles(root: string, options: CollectOptions = {}): {
   const files: CollectedFile[] = [];
   let ignoredCount = 0;
 
-  walk(absRoot, absRoot, ig, forceInclude, maxFileBytes, files, (ignored) => {
+  walk(absRoot, absRoot, ig, forceInclude, maxFileBytes, changedFiles, files, (ignored) => {
     ignoredCount += ignored;
   });
 
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));
-  return { files, ignoredCount };
+  return { ok: true, value: { files, ignoredCount } };
 }
 
 function walk(
@@ -69,6 +99,7 @@ function walk(
   ig: Ignore,
   forceInclude: Ignore | null,
   maxFileBytes: number,
+  changedFiles: Set<string> | null,
   out: CollectedFile[],
   onIgnored: (n: number) => void,
 ): void {
@@ -100,12 +131,13 @@ function walk(
 
       // If the directory itself is ignored, still descend when force-include is
       // active so paths like vendor/lib.js can be recovered via --include.
-      if (ignored && !forceInclude) {
+      // Also descend when changedFiles is set — changed files may be nested.
+      if (ignored && !forceInclude && !changedFiles) {
         onIgnored(1);
         continue;
       }
 
-      walk(absRoot, abs, ig, forceInclude, maxFileBytes, out, onIgnored);
+      walk(absRoot, abs, ig, forceInclude, maxFileBytes, changedFiles, out, onIgnored);
       continue;
     }
 
@@ -116,6 +148,11 @@ function walk(
 
     if (!entry.isFile()) {
       onIgnored(1);
+      continue;
+    }
+
+    // If --since is active, skip files not in the changed set
+    if (changedFiles && !changedFiles.has(rel)) {
       continue;
     }
 

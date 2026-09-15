@@ -38,7 +38,9 @@ describe("collectFiles ignores", () => {
     // Also create a real-ish binary-looking file
     fs.writeFileSync(path.join(root, "photo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]));
 
-    const { files } = collectFiles(root);
+    const result = collectFiles(root);
+    if (!result.ok) throw new Error("collectFiles failed");
+    const { files } = result.value;
     const paths = files.map((f) => f.relPath);
 
     expect(paths).toContain("README.md");
@@ -59,7 +61,9 @@ describe("collectFiles ignores", () => {
       "scratch.tmp": "tmp",
     });
 
-    const paths = collectFiles(root).files.map((f) => f.relPath);
+    const result = collectFiles(root);
+    if (!result.ok) throw new Error("collectFiles failed");
+    const paths = result.value.files.map((f) => f.relPath);
     expect(paths).toContain("app.ts");
     expect(paths).not.toContain("secret/key.ts");
     expect(paths).not.toContain("scratch.tmp");
@@ -72,12 +76,16 @@ describe("collectFiles ignores", () => {
       "vendor/lib.js": "c",
     });
 
-    const ignored = collectFiles(root, { ignore: ["drop.ts"] }).files.map((f) => f.relPath);
+    const ignoredResult = collectFiles(root, { ignore: ["drop.ts"] });
+    if (!ignoredResult.ok) throw new Error("collectFiles failed");
+    const ignored = ignoredResult.value.files.map((f) => f.relPath);
     expect(ignored).toContain("keep.ts");
     expect(ignored).not.toContain("drop.ts");
 
     // vendor/ is in DEFAULT_IGNORES — force include a file under it
-    const forced = collectFiles(root, { include: ["vendor/lib.js"] }).files.map((f) => f.relPath);
+    const forcedResult = collectFiles(root, { include: ["vendor/lib.js"] });
+    if (!forcedResult.ok) throw new Error("collectFiles failed");
+    const forced = forcedResult.value.files.map((f) => f.relPath);
     expect(forced).toContain("vendor/lib.js");
   });
 });

@@ -72,16 +72,23 @@ contextpack pack . --ignore 'tests/**' --ignore 'fixtures/**'
 
 # Preview which files would be included (dry-run)
 contextpack pack . --list --budget 8000
+
+# Only files changed since main branch
+contextpack pack . --since main --budget 8000
+
+# Preview changes from last commit
+contextpack pack . --since HEAD~1 --list
 ```
 
 ## What it does
 
 1. Walks the directory tree, respecting `.gitignore`
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
-3. Ranks files by signal (README and manifests first, tests last)
-4. Fits within your token budget, keeping the highest-value files
-5. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
-6. Outputs a structured digest (Markdown, JSON, or plain text)
+3. Optionally filters to only git-changed files with `--since`
+4. Ranks files by signal (README and manifests first, tests last)
+5. Fits within your token budget, keeping the highest-value files
+6. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
+7. Outputs a structured digest (Markdown, JSON, or plain text)
 
 ## Flags
 
@@ -95,6 +102,7 @@ contextpack pack . --list --budget 8000
 | `--include <pat>` | Force-include pattern (repeatable) |
 | `--max-file-bytes <n>` | Skip files larger than N bytes (default: 512KB) |
 | `-l, --list` | Preview which files would be included without dumping contents |
+| `-s, --since <ref>` | Only include files changed since git ref (e.g. `main`, `HEAD~1`) |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
