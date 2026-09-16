@@ -7,7 +7,7 @@ import type { Ignore } from "ignore";
 const ignore = ignoreImport as unknown as (options?: { ignoreCase?: boolean }) => Ignore;
 import { DEFAULT_IGNORES, TEXT_BASENAMES, TEXT_EXTENSIONS } from "../ignore/defaults.js";
 import { getChangedFilesSince } from "./git.js";
-import type { CollectOptions } from "../types.js";
+import type { CollectOptions, PackedFileKind } from "../types.js";
 
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024; // 512 KiB
 
@@ -16,11 +16,20 @@ export interface CollectedFile {
   relPath: string;
   absPath: string;
   size: number;
+  /** Precomputed content (e.g. a unified diff). Budget uses this instead of reading the file. */
+  content?: string;
+  /** Full file body vs unified diff. */
+  kind?: PackedFileKind;
 }
 
 export interface CollectResult {
   files: CollectedFile[];
   ignoredCount: number;
+  /** Present when `--since` successfully resolved a git repo. */
+  git?: {
+    gitRoot: string;
+    untracked: Set<string>;
+  };
 }
 
 export interface CollectError {
@@ -47,6 +56,7 @@ export function collectFiles(root: string, options: CollectOptions = {}): Collec
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
 
   let changedFiles: Set<string> | null = null;
+  let git: CollectResult["git"];
   if (options.since) {
     const gitResult = getChangedFilesSince(absRoot, options.since);
     if (!gitResult.ok) {
@@ -59,6 +69,10 @@ export function collectFiles(root: string, options: CollectOptions = {}): Collec
       };
     }
     changedFiles = gitResult.value.files;
+    git = {
+      gitRoot: gitResult.value.gitRoot,
+      untracked: gitResult.value.untracked,
+    };
   }
 
   const ig = ignore();
@@ -90,7 +104,7 @@ export function collectFiles(root: string, options: CollectOptions = {}): Collec
   });
 
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));
-  return { ok: true, value: { files, ignoredCount } };
+  return { ok: true, value: { files, ignoredCount, git } };
 }
 
 function walk(

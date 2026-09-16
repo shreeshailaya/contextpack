@@ -234,6 +234,48 @@ describe("CLI", () => {
     expect(stdout).toContain("truncated");
     expect(stdout).toContain("big.txt");
   });
+
+  it("has --diff flag", () => {
+    const program = createProgram();
+    const packCmd = program.commands.find((c) => c.name() === "pack");
+    expect(packCmd).toBeDefined();
+
+    const diffOpt = packCmd!.options.find((o) => o.long === "--diff");
+    expect(diffOpt).toBeDefined();
+    expect(diffOpt!.short).toBeUndefined();
+  });
+
+  it("--diff without --since exits with a clear error", async () => {
+    const root = tmpProject({
+      "a.txt": "hello",
+    });
+
+    const program = createProgram();
+    program.exitOverride();
+
+    let stderr = "";
+    const originalError = console.error;
+    console.error = (msg: string) => {
+      stderr += String(msg);
+    };
+
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (): boolean => true;
+
+    const prevExit = process.exitCode;
+    process.exitCode = undefined;
+
+    try {
+      await program.parseAsync(["node", "contextpack", "pack", root, "--diff"]);
+    } finally {
+      process.stdout.write = originalWrite;
+      console.error = originalError;
+    }
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr).toContain("--diff requires --since");
+    process.exitCode = prevExit;
+  });
 });
 
 describe("formatList", () => {

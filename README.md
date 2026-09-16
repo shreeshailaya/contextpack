@@ -78,6 +78,9 @@ contextpack pack . --since main --budget 8000
 
 # Preview changes from last commit
 contextpack pack . --since HEAD~1 --list
+
+# Pack unified diffs of changes since main (cheaper than full files)
+contextpack pack . --since main --diff
 ```
 
 ## What it does
@@ -85,10 +88,11 @@ contextpack pack . --since HEAD~1 --list
 1. Walks the directory tree, respecting `.gitignore`
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
 3. Optionally filters to only git-changed files with `--since`
-4. Ranks files by signal (README and manifests first, tests last)
-5. Fits within your token budget, keeping the highest-value files
-6. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
-7. Outputs a structured digest (Markdown, JSON, or plain text)
+4. With `--diff`, packs unified diffs of those changes instead of full file bodies (untracked files stay full content)
+5. Ranks files by signal (README and manifests first, tests last)
+6. Fits within your token budget, keeping the highest-value files
+7. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
+8. Outputs a structured digest (Markdown, JSON, or plain text)
 
 ## Flags
 
@@ -103,6 +107,7 @@ contextpack pack . --since HEAD~1 --list
 | `--max-file-bytes <n>` | Skip files larger than N bytes (default: 512KB) |
 | `-l, --list` | Preview which files would be included without dumping contents |
 | `-s, --since <ref>` | Only include files changed since git ref (e.g. `main`, `HEAD~1`) |
+| `--diff` | With `--since`, pack unified diffs of tracked changes instead of full files |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 

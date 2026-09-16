@@ -4,6 +4,9 @@ export type OutputFormat = "md" | "json" | "plain";
 /** Output formats for --list preview (plain text table or json). */
 export type ListFormat = "plain" | "json";
 
+/** Whether packed content is a full file body or a unified git diff. */
+export type PackedFileKind = "file" | "diff";
+
 /** A single file selected for inclusion in a pack. */
 export interface PackedFile {
   /** Path relative to the pack root. */
@@ -16,6 +19,8 @@ export interface PackedFile {
   bytes: number;
   /** True if the file was partially included due to budget constraints. */
   partial?: boolean;
+  /** Full file body vs unified diff. Defaults to "file". */
+  kind?: PackedFileKind;
 }
 
 /** Result of a pack operation. */
@@ -56,6 +61,12 @@ export interface PackOptions {
   prioritize?: boolean;
   /** Only include files changed since this git ref. */
   since?: string;
+  /**
+   * Pack unified git diffs for tracked files changed since `since`,
+   * instead of full file contents. Requires `since`. Untracked files
+   * still pack as full content.
+   */
+  diff?: boolean;
 }
 
 export interface CollectOptions {

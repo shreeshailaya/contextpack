@@ -4,8 +4,9 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 import { pack } from "../src/pack/pack.js";
-import { getChangedFilesSince, isGitAvailable, findGitRoot } from "../src/pack/git.js";
+import { getChangedFilesSince, getUnifiedDiffs, isGitAvailable, findGitRoot } from "../src/pack/git.js";
 import { collectFiles } from "../src/pack/collect.js";
+import { formatList, formatPack } from "../src/pack/format.js";
 
 const temps: string[] = [];
 
@@ -267,5 +268,190 @@ describe("pack with --since", () => {
       const paths = result.value.files.map((f) => f.path);
       expect(paths).toContain("untracked.ts");
     }
+  });
+});
+
+describe("pack with --since --diff", () => {
+  it("packs a modified file as a unified diff", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "app.ts", "const x = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    writeFile(dir, "app.ts", "const x = 2;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "change x");
+
+    const result = pack(dir, { since: "HEAD~1", diff: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const app = result.value.files.find((f) => f.path === "app.ts");
+    expect(app).toBeDefined();
+    expect(app!.kind).toBe("diff");
+    expect(app!.content).toContain("diff --git");
+    expect(app!.content).toContain("@@");
+    expect(app!.content).toContain("-const x = 1;");
+    expect(app!.content).toContain("+const x = 2;");
+    expect(app!.content).not.toBe("const x = 2;\n");
+  });
+
+  it("packs untracked files as full content", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "committed.ts", "export const committed = true;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    writeFile(dir, "new.ts", "export const fresh = true;\n");
+
+    const result = pack(dir, { since: "HEAD", diff: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const fresh = result.value.files.find((f) => f.path === "new.ts");
+    expect(fresh).toBeDefined();
+    expect(fresh!.kind).toBe("file");
+    expect(fresh!.content).toBe("export const fresh = true;\n");
+    expect(fresh!.content).not.toContain("diff --git");
+  });
+
+  it("returns an error when --diff is set without --since", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+    writeFile(dir, "file.ts", "export {};\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    const result = pack(dir, { diff: true });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("--diff requires --since");
+    }
+  });
+
+  it("--list --since --diff still previews the changed file set", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "old.ts", "export const old = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    writeFile(dir, "old.ts", "export const old = 2;\n");
+    writeFile(dir, "added.ts", "export const added = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "changes");
+    writeFile(dir, "untracked.ts", "export const untracked = 1;\n");
+
+    const result = pack(dir, { since: "HEAD~1", diff: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const paths = result.value.files.map((f) => f.path);
+    expect(paths).toContain("old.ts");
+    expect(paths).toContain("added.ts");
+    expect(paths).toContain("untracked.ts");
+    expect(paths).not.toContain("README.md");
+
+    const preview = formatList(result.value, "plain");
+    expect(preview).toContain("old.ts");
+    expect(preview).toContain("added.ts");
+    expect(preview).toContain("untracked.ts");
+    expect(preview).not.toContain("export const old");
+    expect(preview).not.toContain("diff --git");
+
+    const jsonPreview = JSON.parse(formatList(result.value, "json")) as {
+      entries: { path: string; kind: string }[];
+    };
+    expect(jsonPreview.entries.find((e) => e.path === "old.ts")?.kind).toBe("diff");
+    expect(jsonPreview.entries.find((e) => e.path === "untracked.ts")?.kind).toBe("file");
+  });
+
+  it("fences diffs as diff in markdown and exposes kind in JSON", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "app.ts", "const x = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    writeFile(dir, "app.ts", "const x = 2;\n");
+    writeFile(dir, "new.ts", "export const n = 1;\n");
+
+    const result = pack(dir, { since: "HEAD", diff: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const md = formatPack(result.value, "md");
+    expect(md).toContain("```diff");
+    expect(md).toContain("[diff]");
+    expect(md).toContain("## app.ts [diff]");
+    expect(md).toContain("## new.ts");
+    expect(md).not.toContain("## new.ts [diff]");
+
+    const parsed = JSON.parse(formatPack(result.value, "json")) as {
+      files: { path: string; kind: string; content: string }[];
+    };
+    expect(parsed.files.find((f) => f.path === "app.ts")?.kind).toBe("diff");
+    expect(parsed.files.find((f) => f.path === "new.ts")?.kind).toBe("file");
+    expect(parsed.files.find((f) => f.path === "new.ts")?.content).toBe("export const n = 1;\n");
+  });
+
+  it("scopes diffs to a subdirectory pack root in a monorepo", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "pkg/app.ts", "const x = 1;\n");
+    writeFile(dir, "other/skip.ts", "const y = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    writeFile(dir, "pkg/app.ts", "const x = 2;\n");
+    writeFile(dir, "other/skip.ts", "const y = 2;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "changes");
+
+    const packRoot = path.join(dir, "pkg");
+    const result = pack(packRoot, { since: "HEAD~1", diff: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const paths = result.value.files.map((f) => f.path);
+    expect(paths).toContain("app.ts");
+    expect(paths).not.toContain("skip.ts");
+    expect(paths.some((p) => p.includes("other"))).toBe(false);
+
+    const app = result.value.files.find((f) => f.path === "app.ts");
+    expect(app?.kind).toBe("diff");
+    expect(app?.content).toContain("-const x = 1;");
+    expect(app?.content).toContain("+const x = 2;");
+  });
+});
+
+describe("getUnifiedDiffs", () => {
+  it("returns a path-scoped unified diff mapped by absolute path", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "src/a.ts", "const a = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    writeFile(dir, "src/a.ts", "const a = 2;\n");
+
+    const abs = path.join(dir, "src/a.ts");
+    const result = getUnifiedDiffs(dir, "HEAD", [abs]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const diff = result.value.get(abs);
+    expect(diff).toBeDefined();
+    expect(diff).toContain("diff --git");
+    expect(diff).toContain("-const a = 1;");
+    expect(diff).toContain("+const a = 2;");
   });
 });
