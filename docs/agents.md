@@ -34,7 +34,7 @@ Use contextpack when an agent needs:
 - **Codebase orientation** — Understanding project structure, dependencies, and conventions before a task
 - **Refactor context** — Seeing which files exist and how they relate before a large change
 - **Review preparation** — Getting a snapshot of what changed or what exists in a directory
-- **PR review context** — Use `--since main` to pack only files changed in a PR branch
+- **PR review context** — Use `--since main --diff` to pack patches of files changed in a PR branch
 - **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
 
 ## Basic usage
@@ -126,9 +126,14 @@ contextpack pack . --since main --list
 
 # Combine with other options
 contextpack pack ./src --since main --budget 4000 --format json
+
+# Pack the patches, not the whole files
+contextpack pack . --since main --diff --budget 4000
 ```
 
 This includes modified, added, and untracked files. Deleted files are skipped (nothing to pack). If the directory is not inside a git repo, or the ref is invalid, contextpack exits with an error.
+
+`--diff` requires `--since`. Tracked files are packed as unified diffs (`git diff <ref> -- <file>`). Untracked files still pack as full content — there is no prior blob to diff against. Markdown fences diffs as `diff`; JSON sets `kind` to `"diff"` or `"file"` so agents can tell them apart.
 
 ## Budget guidelines
 
@@ -175,13 +180,13 @@ contextpack pack ./src/middleware --budget 4000 -o middleware-context.md
 ```bash
 # 1. Agent receives task: "Review the changes in this PR"
 
-# 2. Agent packs only changed files
-contextpack pack . --since main --budget 12000 -o changes.md
+# 2. Agent packs the changes (patches, not whole files)
+contextpack pack . --since main --diff --budget 12000 -o changes.md
 
 # 3. Agent reviews the digest:
-#    - Sees only modified/added files
-#    - Understands the scope of changes
-#    - Can focus review on what's new
+#    - Sees unified diffs for modified files
+#    - Sees full content for new/untracked files
+#    - Can focus review on what actually changed
 
 # 4. Agent provides targeted feedback
 ```

@@ -54,7 +54,7 @@ export function selectUnderBudget(
   const skipped: string[] = [];
 
   for (const meta of collected) {
-    const content = readTextFile(meta.absPath);
+    const content = meta.content ?? readTextFile(meta.absPath);
     if (content === null) {
       skipped.push(meta.relPath);
       continue;
@@ -70,6 +70,7 @@ export function selectUnderBudget(
       content,
       tokens,
       bytes: Buffer.byteLength(content, "utf8"),
+      kind: meta.kind ?? "file",
     }));
     return {
       files,
@@ -104,6 +105,7 @@ export function selectUnderBudget(
         content: item.content,
         tokens: item.tokens,
         bytes: Buffer.byteLength(item.content, "utf8"),
+        kind: item.meta.kind ?? "file",
       });
       totalTokens += item.tokens;
     } else {
@@ -119,6 +121,7 @@ export function selectUnderBudget(
           tokens: partialTokens,
           bytes: Buffer.byteLength(partialContent, "utf8"),
           partial: true,
+          kind: item.meta.kind ?? "file",
         });
         totalTokens += partialTokens;
       }

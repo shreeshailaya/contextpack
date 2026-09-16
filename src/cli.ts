@@ -75,6 +75,11 @@ export function createProgram(): Command {
       "-s, --since <ref>",
       "only include files changed since git ref (e.g. main, HEAD~1, commit SHA)",
     )
+    .option(
+      "--diff",
+      "pack unified diffs of files changed since --since instead of full file contents (requires --since)",
+      false,
+    )
     .addHelpText(
       "after",
       `
@@ -89,11 +94,13 @@ Examples:
   $ contextpack pack . --list --format json     # JSON preview for agents
   $ contextpack pack . --since main             # Only files changed since main branch
   $ contextpack pack . --since HEAD~1 --list    # Preview changes from last commit
+  $ contextpack pack . --since main --diff      # Pack unified diffs of changes since main
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
   Respects .gitignore plus built-in ignores (node_modules, lockfiles, binaries, secrets).
   --since requires git and a valid ref; includes modified, added, and untracked files.
+  --diff requires --since. Tracked changes are packed as unified diffs; untracked files stay full content.
 `,
     )
     .action((targetPath: string, opts) => {
@@ -113,6 +120,7 @@ interface PackCliOpts {
   quiet?: boolean;
   list?: boolean;
   since?: string;
+  diff?: boolean;
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -133,17 +141,24 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
 
   const effectiveBudget = opts.budget === 0 ? null : opts.budget;
 
+  if (opts.diff && !opts.since) {
+    console.error("error: --diff requires --since");
+    process.exitCode = 1;
+    return;
+  }
+
   const packOptions = {
     budget: effectiveBudget,
     ignore: opts.ignore,
     include: opts.include,
     maxFileBytes: opts.maxFileBytes,
     since: opts.since,
+    diff: opts.diff,
   };
 
   let result: import("./types.js").PackResult;
 
-  if (opts.since) {
+  if (opts.since || opts.diff) {
     const packResult = pack(root, packOptions as Parameters<typeof pack>[1] & { since: string });
     if (!packResult.ok) {
       console.error(`error: ${packResult.error.message}`);
@@ -202,6 +217,12 @@ function printSummary(result: import("./types.js").PackResult, outPath: string |
   }
 
   parts.push(`${result.stats.included} files`);
+
+  const diffCount = result.files.filter((f) => f.kind === "diff").length;
+  if (diffCount > 0) {
+    parts.push(`${diffCount} diffs`);
+  }
+
   parts.push(`~${formatTokenCount(result.totalTokens)} tokens`);
 
   if (result.budget != null) {
@@ -224,6 +245,12 @@ function printListSummary(result: import("./types.js").PackResult, outPath: stri
   }
 
   parts.push(`${result.stats.included} would be included`);
+
+  const diffCount = result.files.filter((f) => f.kind === "diff").length;
+  if (diffCount > 0) {
+    parts.push(`${diffCount} diffs`);
+  }
+
   parts.push(`~${formatTokenCount(result.totalTokens)} tokens`);
 
   if (result.budget != null) {

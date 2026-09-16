@@ -1,4 +1,4 @@
-import type { OutputFormat, PackResult, ListFormat } from "../types.js";
+import type { OutputFormat, PackResult, ListFormat, PackedFile, PackedFileKind } from "../types.js";
 import { formatTokenCount } from "./tokens.js";
 
 export function formatPack(result: PackResult, format: OutputFormat): string {
@@ -34,6 +34,10 @@ function formatMarkdown(result: PackResult): string {
   if (partialCount > 0) {
     lines.push(`| Partial (prefix only) | ${partialCount} |`);
   }
+  const diffCount = result.files.filter((f) => f.kind === "diff").length;
+  if (diffCount > 0) {
+    lines.push(`| Diffs | ${diffCount} |`);
+  }
   if (result.stats.truncated > 0) {
     lines.push(`| Truncated (over budget) | ${result.stats.truncated} |`);
   }
@@ -46,17 +50,17 @@ function formatMarkdown(result: PackResult): string {
   lines.push(`## Files`);
   lines.push("");
   for (const f of result.files) {
-    const partialMarker = f.partial ? " [partial]" : "";
-    lines.push(`- \`${f.path}\` (~${formatTokenCount(f.tokens)} tok)${partialMarker}`);
+    const marker = fileMarker(f);
+    lines.push(`- \`${f.path}\` (~${formatTokenCount(f.tokens)} tok)${marker}`);
   }
   lines.push("");
   lines.push(`---`);
   lines.push("");
 
   for (const f of result.files) {
-    const lang = fenceLang(f.path);
-    const partialSuffix = f.partial ? " [partial]" : "";
-    lines.push(`## ${f.path}${partialSuffix}`);
+    const lang = f.kind === "diff" ? "diff" : fenceLang(f.path);
+    const marker = fileMarker(f);
+    lines.push(`## ${f.path}${marker}`);
     lines.push("");
     lines.push("```" + lang);
     lines.push(f.content.replace(/\n$/, ""));
@@ -91,8 +95,8 @@ function formatPlain(result: PackResult): string {
   lines.push("");
 
   for (const f of result.files) {
-    const partialMarker = f.partial ? " [partial]" : "";
-    lines.push(`===== ${f.path} (~${f.tokens} tok)${partialMarker} =====`);
+    const marker = fileMarker(f);
+    lines.push(`===== ${f.path} (~${f.tokens} tok)${marker} =====`);
     lines.push(f.content.replace(/\n$/, ""));
     if (f.partial) {
       lines.push("[... truncated to fit budget ...]");
@@ -122,6 +126,7 @@ function formatJson(result: PackResult): string {
         path: f.path,
         tokens: f.tokens,
         bytes: f.bytes,
+        kind: f.kind ?? "file",
         partial: f.partial ?? false,
         content: f.content,
       })),
@@ -129,6 +134,13 @@ function formatJson(result: PackResult): string {
     null,
     2,
   );
+}
+
+function fileMarker(f: PackedFile): string {
+  const parts: string[] = [];
+  if (f.kind === "diff") parts.push("diff");
+  if (f.partial) parts.push("partial");
+  return parts.length ? ` [${parts.join("] [")}]` : "";
 }
 
 function fenceLang(filePath: string): string {
@@ -180,6 +192,7 @@ export interface ListEntry {
   path: string;
   tokens: number;
   status: ListFileStatus;
+  kind: PackedFileKind;
 }
 
 export interface ListPreview {
@@ -204,20 +217,30 @@ function buildListPreview(result: PackResult): ListPreview {
   for (const f of result.files) {
     if (f.partial) {
       partialPaths.add(f.path);
-      entries.push({ path: f.path, tokens: f.tokens, status: "partial" });
+      entries.push({
+        path: f.path,
+        tokens: f.tokens,
+        status: "partial",
+        kind: f.kind ?? "file",
+      });
     } else {
-      entries.push({ path: f.path, tokens: f.tokens, status: "included" });
+      entries.push({
+        path: f.path,
+        tokens: f.tokens,
+        status: "included",
+        kind: f.kind ?? "file",
+      });
     }
   }
 
   for (const p of result.truncated) {
     if (!partialPaths.has(p)) {
-      entries.push({ path: p, tokens: 0, status: "truncated" });
+      entries.push({ path: p, tokens: 0, status: "truncated", kind: "file" });
     }
   }
 
   for (const p of result.skipped) {
-    entries.push({ path: p, tokens: 0, status: "skipped" });
+    entries.push({ path: p, tokens: 0, status: "skipped", kind: "file" });
   }
 
   const partialCount = result.files.filter((f) => f.partial).length;
