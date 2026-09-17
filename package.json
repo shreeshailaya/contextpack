@@ -1,6 +1,6 @@
 {
   "name": "@shree_vitkar/contextpack",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Pack any repo into clean, token-budgeted context for humans and AI coding agents.",
   "type": "module",
   "bin": {
@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "benchmark": "tsx scripts/benchmark.ts"
   },
   "keywords": [
     "cli",

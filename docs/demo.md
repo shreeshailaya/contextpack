@@ -103,3 +103,5 @@ contextpack pack . --budget 500
 # See what gets truncated
 contextpack pack . --budget 200
 ```
+
+For measured naive-dump vs packed token counts on this fixture, see [benchmark.md](./benchmark.md) (`npm run benchmark`).
