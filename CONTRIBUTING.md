@@ -14,6 +14,7 @@ npm run build
 
 - **Node.js 18+**
 - Run tests before opening a PR: `npm test`
+- Reproducible naive-vs-packed numbers: `npm run benchmark`
 - Typecheck: `npm run lint` (or `npm run build`)
 
 ## Design principles

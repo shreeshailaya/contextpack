@@ -50,6 +50,7 @@ src/
     collect.ts        # File discovery + gitignore
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation (chars/4)
+    naive.ts          # Naive dump (benchmark baseline)
     format.ts         # Output formatters (md/json/plain)
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest tests
@@ -62,6 +63,7 @@ docs/                 # Documentation
 npm install          # Install dependencies
 npm run build        # Compile TypeScript
 npm test             # Run tests
+npm run benchmark    # Naive dump vs packed budgets
 npm run dev          # Run with tsx (no build needed)
 ```
 

@@ -128,6 +128,17 @@ See [docs/agents.md](./docs/agents.md) for integration patterns.
 
 Token counts are **estimates**: `characters / 4`. This is good enough for budgeting and fits most tokenizers within ~20%. It is not a model-specific tokenizer—don't use it for billing or exact context window calculations.
 
+## Honest numbers
+
+Measured on `fixtures/demo-project` with `npm run benchmark` (chars/4 estimates, not a model tokenizer):
+
+- **Naive dump** — every text-ish file, no gitignore, no ranking: 8 files, ~1,649 tokens
+- **Packed** — default ignores; budget 500, 2000, or unlimited: 5 files, ~161 tokens (−90%)
+
+The packed tree fits in a 500-token budget, so that 90% is noise filtering (`vendor/`, `build/`, lockfile), not truncation. On this repo's own `src/`, unlimited pack matches a naive dump (already clean); a tight budget then truncates.
+
+Methodology and the full table: [docs/benchmark.md](docs/benchmark.md). Re-run with `npm run benchmark`.
+
 ## Output formats
 
 - **md** — Markdown digest with summary table and fenced code blocks. Readable by humans, parseable by agents.
@@ -151,10 +162,13 @@ src/
     collect.ts        # Walk + gitignore
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation
+    naive.ts          # Naive dump (benchmark baseline)
     format.ts         # md | json | plain output
     pack.ts           # Orchestrator
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest
+scripts/
+  benchmark.ts        # Naive dump vs packed budgets
 ```
 
 ## Development
@@ -165,11 +179,12 @@ cd contextpack
 npm install
 npm test
 npm run build
+npm run benchmark
 ```
 
 ## Status
 
-**v0.1** — CLI works: pack, ignore, budget, formats. Tests pass. Expect ranking heuristics and ignore defaults to evolve.
+**v0.1.7** — CLI works: pack, ignore, budget, formats. Reproducible naive-vs-packed benchmark. Tests pass. Expect ranking heuristics and ignore defaults to evolve.
 
 ## License
 
