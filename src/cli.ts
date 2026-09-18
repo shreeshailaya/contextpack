@@ -98,7 +98,7 @@ Examples:
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
-  Respects .gitignore plus built-in ignores (node_modules, lockfiles, binaries, secrets).
+  Ignore layers: built-in defaults, then optional root .gitignore / .cursorignore / .aiignore / .copilotignore, then CLI --ignore. --include wins over ignores.
   --since requires git and a valid ref; includes modified, added, and untracked files.
   --diff requires --since. Tracked changes are packed as unified diffs; untracked files stay full content.
 `,

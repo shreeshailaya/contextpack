@@ -85,7 +85,7 @@ contextpack pack . --since main --diff
 
 ## What it does
 
-1. Walks the directory tree, respecting `.gitignore`
+1. Walks the directory tree, respecting `.gitignore` and optional agent ignore files at the pack root (`.cursorignore`, `.aiignore`, `.copilotignore`)
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
 3. Optionally filters to only git-changed files with `--since`
 4. With `--diff`, packs unified diffs of those changes instead of full file bodies (untracked files stay full content)
@@ -93,6 +93,12 @@ contextpack pack . --since main --diff
 6. Fits within your token budget, keeping the highest-value files
 7. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
 8. Outputs a structured digest (Markdown, JSON, or plain text)
+
+Ignore layers (gitignore syntax), applied in this order:
+
+`DEFAULT_IGNORES` → `.gitignore` → `.cursorignore` → `.aiignore` → `.copilotignore` → CLI `--ignore`
+
+Agent ignore files are optional and only read from the pack root when present (not nested per-directory). `--include` still force-includes matched paths and wins over ignores.
 
 ## Flags
 
@@ -159,7 +165,7 @@ src/
   cli.ts              # Commander CLI
   index.ts            # bin entry
   pack/
-    collect.ts        # Walk + gitignore
+    collect.ts        # Walk + gitignore / agent ignores
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation
     naive.ts          # Naive dump (benchmark baseline)
@@ -184,7 +190,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.7** — CLI works: pack, ignore, budget, formats. Reproducible naive-vs-packed benchmark. Tests pass. Expect ranking heuristics and ignore defaults to evolve.
+**v0.1.8** — Packing respects root `.cursorignore`, `.aiignore`, and `.copilotignore` when present. CLI: pack, ignore, budget, formats. Reproducible naive-vs-packed benchmark. Tests pass. Expect ranking heuristics and ignore defaults to evolve.
 
 ## License
 
