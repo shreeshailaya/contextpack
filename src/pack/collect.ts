@@ -42,9 +42,21 @@ export type CollectReturn =
   | { ok: false; error: CollectError };
 
 /**
+ * Optional ignore files loaded from the pack root (not nested directories),
+ * in layer order after DEFAULT_IGNORES and before CLI `--ignore`.
+ * Missing or unreadable files are skipped.
+ */
+export const ROOT_IGNORE_FILES = [
+  ".gitignore",
+  ".cursorignore",
+  ".aiignore",
+  ".copilotignore",
+] as const;
+
+/**
  * Walk `root` and return candidate text files, respecting:
- * - root `.gitignore` (if present)
  * - DEFAULT_IGNORES
+ * - root `.gitignore` / `.cursorignore` / `.aiignore` / `.copilotignore` (if present)
  * - extra `--ignore` patterns
  * - `--include` patterns that force-include matched paths
  * - `--since` git ref filtering (only files changed since ref)
@@ -78,14 +90,8 @@ export function collectFiles(root: string, options: CollectOptions = {}): Collec
   const ig = ignore();
   ig.add([...DEFAULT_IGNORES]);
 
-  const gitignorePath = path.join(absRoot, ".gitignore");
-  if (fs.existsSync(gitignorePath)) {
-    try {
-      const content = fs.readFileSync(gitignorePath, "utf8");
-      ig.add(content);
-    } catch {
-      // ignore unreadable .gitignore
-    }
+  for (const name of ROOT_IGNORE_FILES) {
+    addIgnoreFile(ig, absRoot, name);
   }
 
   if (options.ignore?.length) {
@@ -105,6 +111,17 @@ export function collectFiles(root: string, options: CollectOptions = {}): Collec
 
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));
   return { ok: true, value: { files, ignoredCount, git } };
+}
+
+/** Load one gitignore-syntax file from the pack root; skip if missing or unreadable. */
+function addIgnoreFile(ig: Ignore, absRoot: string, filename: string): void {
+  const filePath = path.join(absRoot, filename);
+  if (!fs.existsSync(filePath)) return;
+  try {
+    ig.add(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    // skip unreadable ignore files (same as .gitignore)
+  }
 }
 
 function walk(

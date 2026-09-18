@@ -1,6 +1,8 @@
 /**
- * Default ignore patterns layered on top of any .gitignore found at the root.
- * These catch common noise even when a project has a minimal or missing .gitignore.
+ * Default ignore patterns, applied first.
+ * Then optional pack-root files (`.gitignore`, `.cursorignore`, `.aiignore`,
+ * `.copilotignore`) and finally CLI `--ignore`. These catch common noise even
+ * when a project has a minimal or missing ignore file.
  */
 export const DEFAULT_IGNORES: readonly string[] = [
   // VCS

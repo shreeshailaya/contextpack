@@ -69,6 +69,86 @@ describe("collectFiles ignores", () => {
     expect(paths).not.toContain("scratch.tmp");
   });
 
+  it("respects root .cursorignore", () => {
+    const root = tmpProject({
+      ".cursorignore": "agent-secrets/\n*.local.ts\n",
+      "app.ts": "export {}",
+      "agent-secrets/key.ts": "export const k = 1",
+      "scratch.local.ts": "tmp",
+    });
+
+    const result = collectFiles(root);
+    if (!result.ok) throw new Error("collectFiles failed");
+    const paths = result.value.files.map((f) => f.relPath);
+    expect(paths).toContain("app.ts");
+    expect(paths).not.toContain("agent-secrets/key.ts");
+    expect(paths).not.toContain("scratch.local.ts");
+  });
+
+  it("respects root .aiignore", () => {
+    const root = tmpProject({
+      ".aiignore": "private/\n",
+      "app.ts": "export {}",
+      "private/notes.ts": "export const n = 1",
+    });
+
+    const result = collectFiles(root);
+    if (!result.ok) throw new Error("collectFiles failed");
+    const paths = result.value.files.map((f) => f.relPath);
+    expect(paths).toContain("app.ts");
+    expect(paths).not.toContain("private/notes.ts");
+  });
+
+  it("respects root .copilotignore", () => {
+    const root = tmpProject({
+      ".copilotignore": "generated/\n",
+      "app.ts": "export {}",
+      "generated/out.ts": "export const o = 1",
+    });
+
+    const result = collectFiles(root);
+    if (!result.ok) throw new Error("collectFiles failed");
+    const paths = result.value.files.map((f) => f.relPath);
+    expect(paths).toContain("app.ts");
+    expect(paths).not.toContain("generated/out.ts");
+  });
+
+  it("lets --include force-include a path ignored only by .cursorignore", () => {
+    const root = tmpProject({
+      ".cursorignore": "vendor-agent/lib.ts\n",
+      "keep.ts": "a",
+      "vendor-agent/lib.ts": "c",
+    });
+
+    const ignoredResult = collectFiles(root);
+    if (!ignoredResult.ok) throw new Error("collectFiles failed");
+    const ignored = ignoredResult.value.files.map((f) => f.relPath);
+    expect(ignored).toContain("keep.ts");
+    expect(ignored).not.toContain("vendor-agent/lib.ts");
+
+    const forcedResult = collectFiles(root, { include: ["vendor-agent/lib.ts"] });
+    if (!forcedResult.ok) throw new Error("collectFiles failed");
+    const forced = forcedResult.value.files.map((f) => f.relPath);
+    expect(forced).toContain("keep.ts");
+    expect(forced).toContain("vendor-agent/lib.ts");
+  });
+
+  it("lets --include force-include a path ignored only by .aiignore", () => {
+    const root = tmpProject({
+      ".aiignore": "hidden.ts\n",
+      "keep.ts": "a",
+      "hidden.ts": "b",
+    });
+
+    const ignoredResult = collectFiles(root);
+    if (!ignoredResult.ok) throw new Error("collectFiles failed");
+    expect(ignoredResult.value.files.map((f) => f.relPath)).not.toContain("hidden.ts");
+
+    const forcedResult = collectFiles(root, { include: ["hidden.ts"] });
+    if (!forcedResult.ok) throw new Error("collectFiles failed");
+    expect(forcedResult.value.files.map((f) => f.relPath)).toContain("hidden.ts");
+  });
+
   it("allows extra --ignore and --include overrides", () => {
     const root = tmpProject({
       "keep.ts": "a",

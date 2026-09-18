@@ -191,9 +191,24 @@ contextpack pack . --since main --diff --budget 12000 -o changes.md
 # 4. Agent provides targeted feedback
 ```
 
+## Agent ignore files
+
+Agents already declare what not to feed models via ignore files. When packing, contextpack applies these **optional** files from the pack root (same place as `.gitignore`, not nested directories) if they exist:
+
+- `.cursorignore`
+- `.aiignore`
+- `.copilotignore`
+
+Same gitignore syntax as `.gitignore`. Unreadable files are skipped. Layer order:
+
+`DEFAULT_IGNORES` → `.gitignore` → `.cursorignore` → `.aiignore` → `.copilotignore` → CLI `--ignore`
+
+`--include` still force-includes matched paths over any of those layers.
+
 ## Tips
 
 - **Start with default budget** — 16k tokens is enough for most orientation tasks
 - **Pack incrementally** — Pack specific directories as you need them, not the whole repo upfront
 - **Use JSON for parsing** — If your agent needs to iterate over files, use `--format json`
 - **Check truncated files** — The digest lists files that didn't fit; pack them separately if needed
+- **Reuse existing agent ignores** — Drop a `.cursorignore` (or `.aiignore` / `.copilotignore`) at the pack root; no extra flags needed
