@@ -7,6 +7,7 @@ import type { Ignore } from "ignore";
 const ignore = ignoreImport as unknown as (options?: { ignoreCase?: boolean }) => Ignore;
 import { DEFAULT_IGNORES, TEXT_BASENAMES, TEXT_EXTENSIONS } from "../ignore/defaults.js";
 import { getChangedFilesSince } from "./git.js";
+import { resolveListedPath, skipNote } from "./pathsFrom.js";
 import type { CollectOptions, PackedFileKind } from "../types.js";
 
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024; // 512 KiB
@@ -25,6 +26,8 @@ export interface CollectedFile {
 export interface CollectResult {
   files: CollectedFile[];
   ignoredCount: number;
+  /** Stderr-worthy skip notes from `--paths-from` (missing, absolute, outside root). */
+  notes: string[];
   /** Present when `--since` successfully resolved a git repo. */
   git?: {
     gitRoot: string;
@@ -54,12 +57,13 @@ export const ROOT_IGNORE_FILES = [
 ] as const;
 
 /**
- * Walk `root` and return candidate text files, respecting:
+ * Discover candidate text files, respecting:
  * - DEFAULT_IGNORES
  * - root `.gitignore` / `.cursorignore` / `.aiignore` / `.copilotignore` (if present)
  * - extra `--ignore` patterns
  * - `--include` patterns that force-include matched paths
  * - `--since` git ref filtering (only files changed since ref)
+ * - `--paths-from` explicit path list (no tree walk; intersected with `--since` when both are set)
  *
  * If `options.since` is set and git operations fail, returns an error result.
  */
@@ -104,13 +108,118 @@ export function collectFiles(root: string, options: CollectOptions = {}): Collec
 
   const files: CollectedFile[] = [];
   let ignoredCount = 0;
+  const notes: string[] = [];
+  const onIgnored = (n: number) => {
+    ignoredCount += n;
+  };
 
-  walk(absRoot, absRoot, ig, forceInclude, maxFileBytes, changedFiles, files, (ignored) => {
-    ignoredCount += ignored;
-  });
+  if (options.paths) {
+    collectListedPaths(
+      absRoot,
+      options.paths,
+      ig,
+      forceInclude,
+      maxFileBytes,
+      changedFiles,
+      files,
+      onIgnored,
+      notes,
+    );
+  } else {
+    walk(absRoot, absRoot, ig, forceInclude, maxFileBytes, changedFiles, files, onIgnored);
+  }
 
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));
-  return { ok: true, value: { files, ignoredCount, git } };
+  return { ok: true, value: { files, ignoredCount, notes, git } };
+}
+
+/**
+ * Resolve only the given paths under `absRoot` (no tree walk).
+ * Invalid / missing paths are skipped with a note; ignore and `--since`
+ * filters still apply. Empty intersection with `--since` is success.
+ */
+function collectListedPaths(
+  absRoot: string,
+  listedPaths: string[],
+  ig: Ignore,
+  forceInclude: Ignore | null,
+  maxFileBytes: number,
+  changedFiles: Set<string> | null,
+  out: CollectedFile[],
+  onIgnored: (n: number) => void,
+  notes: string[],
+): void {
+  const seen = new Set<string>();
+
+  for (const listed of listedPaths) {
+    const resolved = resolveListedPath(absRoot, listed);
+    if (!resolved.ok) {
+      notes.push(skipNote(resolved.reason, resolved.listed));
+      continue;
+    }
+
+    const { relPath, absPath } = resolved.value;
+    if (seen.has(relPath)) continue;
+    seen.add(relPath);
+
+    let st: fs.Stats;
+    try {
+      st = fs.lstatSync(absPath);
+    } catch {
+      notes.push(skipNote("missing", listed));
+      continue;
+    }
+
+    if (st.isSymbolicLink() || !st.isFile()) {
+      notes.push(skipNote("not-a-file", listed));
+      continue;
+    }
+
+    considerFile(absPath, relPath, ig, forceInclude, maxFileBytes, changedFiles, out, onIgnored);
+  }
+}
+
+/** Apply ignore / since / size / text filters and maybe push a collected file. */
+function considerFile(
+  abs: string,
+  rel: string,
+  ig: Ignore,
+  forceInclude: Ignore | null,
+  maxFileBytes: number,
+  changedFiles: Set<string> | null,
+  out: CollectedFile[],
+  onIgnored: (n: number) => void,
+): void {
+  const forced = forceInclude?.ignores(rel) ?? false;
+  const ignored = !forced && ig.ignores(rel);
+  if (ignored) {
+    onIgnored(1);
+    return;
+  }
+
+  if (changedFiles && !changedFiles.has(rel)) {
+    return;
+  }
+
+  let size = 0;
+  try {
+    const st = fs.statSync(abs);
+    size = st.size;
+    if (size > maxFileBytes) {
+      onIgnored(1);
+      return;
+    }
+  } catch {
+    onIgnored(1);
+    return;
+  }
+
+  if (!looksLikeText(rel, abs) && !forced) {
+    onIgnored(1);
+    return;
+  }
+
+  out.push({ relPath: rel, absPath: abs, size });
 }
 
 /** Load one gitignore-syntax file from the pack root; skip if missing or unreadable. */
@@ -172,40 +281,12 @@ function walk(
       continue;
     }
 
-    if (ignored) {
-      onIgnored(1);
-      continue;
-    }
-
     if (!entry.isFile()) {
       onIgnored(1);
       continue;
     }
 
-    // If --since is active, skip files not in the changed set
-    if (changedFiles && !changedFiles.has(rel)) {
-      continue;
-    }
-
-    let size = 0;
-    try {
-      const st = fs.statSync(abs);
-      size = st.size;
-      if (size > maxFileBytes) {
-        onIgnored(1);
-        continue;
-      }
-    } catch {
-      onIgnored(1);
-      continue;
-    }
-
-    if (!looksLikeText(rel, abs) && !forced) {
-      onIgnored(1);
-      continue;
-    }
-
-    out.push({ relPath: rel, absPath: abs, size });
+    considerFile(abs, rel, ig, forceInclude, maxFileBytes, changedFiles, out, onIgnored);
   }
 }
 

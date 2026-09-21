@@ -45,6 +45,11 @@ export interface PackResult {
     truncated: number;
     skipped: number;
   };
+  /**
+   * Stderr-worthy skip notes (missing / absolute / outside-root listed paths).
+   * Empty when unused. Not part of the digest body.
+   */
+  notes: string[];
 }
 
 /** Options for packing a directory. */
@@ -67,6 +72,12 @@ export interface PackOptions {
    * still pack as full content.
    */
   diff?: boolean;
+  /**
+   * Explicit paths relative to the pack root. When set, only these paths
+   * are resolved — the tree is not walked. Combined with `since`, the
+   * intersection of the list and changed files is packed.
+   */
+  paths?: string[];
 }
 
 export interface CollectOptions {
@@ -75,4 +86,6 @@ export interface CollectOptions {
   maxFileBytes?: number;
   /** Only include files changed since this git ref. */
   since?: string;
+  /** Explicit paths relative to the pack root (skip the tree walk). */
+  paths?: string[];
 }

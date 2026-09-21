@@ -34,6 +34,9 @@ contextpack pack ./src --budget 12000
 
 # JSON format for programmatic access
 contextpack pack . --format json --budget 8000
+
+# Pack only files an agent already found (e.g. ripgrep)
+rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
 ```
 
 See [docs/agents.md](./docs/agents.md) for detailed integration patterns.
@@ -47,11 +50,12 @@ src/
   types.ts            # TypeScript interfaces
   pack/
     pack.ts           # Main orchestrator
-    collect.ts        # File discovery + gitignore
+    collect.ts        # File discovery + gitignore; optional --paths-from list
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation (chars/4)
     naive.ts          # Naive dump (benchmark baseline)
     format.ts         # Output formatters (md/json/plain)
+    pathsFrom.ts      # --paths-from parse + path safety
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest tests
 docs/                 # Documentation
