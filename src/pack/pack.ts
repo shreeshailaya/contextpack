@@ -17,6 +17,7 @@ export type PackReturn =
  * Pack a directory into a token-budgeted context digest.
  *
  * Architecture note: collect → budget-select → (format in CLI layer).
+ * `--paths-from` skips the tree walk and collects only the listed paths.
  * Future: ranking plugins, streaming writers, remote sources can plug in here.
  *
  * Returns a result type when `options.since` or `options.diff` is set
@@ -40,6 +41,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
     include: options.include,
     maxFileBytes: options.maxFileBytes,
     since: options.since,
+    paths: options.paths,
   });
 
   if (!collectResult.ok) {
@@ -50,7 +52,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
     throw new Error(collectResult.error.message);
   }
 
-  const { files: collected, ignoredCount, git } = collectResult.value;
+  const { files: collected, ignoredCount, git, notes } = collectResult.value;
 
   if (options.diff && options.since) {
     const diffError = applyDiffContents(collected, git, options.since);
@@ -69,6 +71,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
     budget,
     truncated: selection.truncated,
     skipped: selection.skipped,
+    notes,
     stats: {
       discovered: collected.length,
       included: selection.files.length,

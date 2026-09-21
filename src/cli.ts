@@ -5,7 +5,8 @@ import { Command } from "commander";
 import { pack } from "./pack/pack.js";
 import { formatPack, formatList } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
-import type { OutputFormat, ListFormat } from "./types.js";
+import { parsePathList, readPathsFromSource } from "./pack/pathsFrom.js";
+import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
 function getVersion(): string {
   try {
@@ -80,6 +81,10 @@ export function createProgram(): Command {
       "pack unified diffs of files changed since --since instead of full file contents (requires --since)",
       false,
     )
+    .option(
+      "--paths-from <file>",
+      "pack only paths listed in a file (one per line; - reads stdin). Does not walk the tree",
+    )
     .addHelpText(
       "after",
       `
@@ -95,12 +100,16 @@ Examples:
   $ contextpack pack . --since main             # Only files changed since main branch
   $ contextpack pack . --since HEAD~1 --list    # Preview changes from last commit
   $ contextpack pack . --since main --diff      # Pack unified diffs of changes since main
+  $ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+  $ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
+  $ contextpack pack . --paths-from paths.txt --list
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
   Ignore layers: built-in defaults, then optional root .gitignore / .cursorignore / .aiignore / .copilotignore, then CLI --ignore. --include wins over ignores.
   --since requires git and a valid ref; includes modified, added, and untracked files.
   --diff requires --since. Tracked changes are packed as unified diffs; untracked files stay full content.
+  --paths-from does not walk the tree. Paths are relative to [path]; absolute paths and .. escapes are skipped (stderr note unless --quiet). Combine with --since for the intersection.
 `,
     )
     .action((targetPath: string, opts) => {
@@ -121,6 +130,7 @@ interface PackCliOpts {
   list?: boolean;
   since?: string;
   diff?: boolean;
+  pathsFrom?: string;
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -147,6 +157,19 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     return;
   }
 
+  let listedPaths: string[] | undefined;
+  if (opts.pathsFrom != null) {
+    try {
+      listedPaths = parsePathList(readPathsFromSource(opts.pathsFrom));
+    } catch (err) {
+      const where = opts.pathsFrom === "-" ? "stdin" : opts.pathsFrom;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`error: cannot read --paths-from ${where}: ${message}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   const packOptions = {
     budget: effectiveBudget,
     ignore: opts.ignore,
@@ -154,9 +177,10 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     maxFileBytes: opts.maxFileBytes,
     since: opts.since,
     diff: opts.diff,
+    paths: listedPaths,
   };
 
-  let result: import("./types.js").PackResult;
+  let result: PackResult;
 
   if (opts.since || opts.diff) {
     const packResult = pack(root, packOptions as Parameters<typeof pack>[1] & { since: string });
@@ -168,6 +192,12 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     result = packResult.value;
   } else {
     result = pack(root, packOptions);
+  }
+
+  if (!opts.quiet && result.notes.length > 0) {
+    for (const note of result.notes) {
+      console.error(`contextpack: ${note}`);
+    }
   }
 
   if (opts.list) {
@@ -209,7 +239,7 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
   }
 }
 
-function printSummary(result: import("./types.js").PackResult, outPath: string | null): void {
+function printSummary(result: PackResult, outPath: string | null): void {
   const parts: string[] = [];
 
   if (outPath) {
@@ -237,7 +267,7 @@ function printSummary(result: import("./types.js").PackResult, outPath: string |
   console.error(`contextpack: ${parts.join(" · ")}`);
 }
 
-function printListSummary(result: import("./types.js").PackResult, outPath: string | null): void {
+function printListSummary(result: PackResult, outPath: string | null): void {
   const parts: string[] = [];
 
   if (outPath) {

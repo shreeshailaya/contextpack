@@ -81,13 +81,22 @@ contextpack pack . --since HEAD~1 --list
 
 # Pack unified diffs of changes since main (cheaper than full files)
 contextpack pack . --since main --diff
+
+# Pack only files matching a search (agent workflow)
+rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+
+# From a file
+contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
+
+# Preview the selected paths under budget
+contextpack pack . --paths-from paths.txt --list
 ```
 
 ## What it does
 
-1. Walks the directory tree, respecting `.gitignore` and optional agent ignore files at the pack root (`.cursorignore`, `.aiignore`, `.copilotignore`)
+1. Walks the directory tree, respecting `.gitignore` and optional agent ignore files at the pack root (`.cursorignore`, `.aiignore`, `.copilotignore`) — or, with `--paths-from`, resolves only an explicit path list (no tree walk)
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
-3. Optionally filters to only git-changed files with `--since`
+3. Optionally filters to only git-changed files with `--since`. Combined with `--paths-from`, packs the intersection
 4. With `--diff`, packs unified diffs of those changes instead of full file bodies (untracked files stay full content)
 5. Ranks files by signal (README and manifests first, tests last)
 6. Fits within your token budget, keeping the highest-value files
@@ -114,6 +123,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `-l, --list` | Preview which files would be included without dumping contents |
 | `-s, --since <ref>` | Only include files changed since git ref (e.g. `main`, `HEAD~1`) |
 | `--diff` | With `--since`, pack unified diffs of tracked changes instead of full files |
+| `--paths-from <file>` | Pack only paths listed in a file (one per line; `-` reads stdin). No tree walk |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
@@ -165,12 +175,13 @@ src/
   cli.ts              # Commander CLI
   index.ts            # bin entry
   pack/
-    collect.ts        # Walk + gitignore / agent ignores
+    collect.ts        # Walk + gitignore / agent ignores; optional explicit path list
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation
     naive.ts          # Naive dump (benchmark baseline)
     format.ts         # md | json | plain output
     pack.ts           # Orchestrator
+    pathsFrom.ts      # --paths-from parse + path safety
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest
 scripts/
@@ -190,7 +201,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.8** — Packing respects root `.cursorignore`, `.aiignore`, and `.copilotignore` when present. CLI: pack, ignore, budget, formats. Reproducible naive-vs-packed benchmark. Tests pass. Expect ranking heuristics and ignore defaults to evolve.
+**v0.1.9** — `--paths-from` packs an explicit path list (file or stdin) under the token budget, without walking the tree. Combine with `--since` for the intersection. CLI: pack, ignore, budget, formats, `--list`, `--diff`. Reproducible naive-vs-packed benchmark. Tests pass. Token counts remain characters/4 estimates. Expect ranking heuristics and ignore defaults to evolve.
 
 ## License
 
