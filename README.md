@@ -138,6 +138,21 @@ contextpack pack . --budget 8000 -o context.md
 # Then include context.md in your prompt
 ```
 
+### Agent setup
+
+Drop Cursor / Claude integration files into a repo so agents know when and how to run contextpack:
+
+```bash
+npx -p @shree_vitkar/contextpack contextpack init
+```
+
+Writes (create only if missing; `--force` overwrites):
+
+- `.cursor/rules/contextpack.mdc` — when/how to pack
+- `skills/contextpack/SKILL.md` — skill with the real install/run commands
+
+Add `--agents` to create or append a short `AGENTS.md` section.
+
 See [docs/agents.md](./docs/agents.md) for integration patterns.
 
 ## Token estimates
@@ -174,6 +189,7 @@ Methodology and the full table: [docs/benchmark.md](docs/benchmark.md). Re-run w
 src/
   cli.ts              # Commander CLI
   index.ts            # bin entry
+  init/               # contextpack init (agent drop-in files)
   pack/
     collect.ts        # Walk + gitignore / agent ignores; optional explicit path list
     budget.ts         # Priority ranking + selection
@@ -201,7 +217,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.9** — `--paths-from` packs an explicit path list (file or stdin) under the token budget, without walking the tree. Combine with `--since` for the intersection. CLI: pack, ignore, budget, formats, `--list`, `--diff`. Reproducible naive-vs-packed benchmark. Tests pass. Token counts remain characters/4 estimates. Expect ranking heuristics and ignore defaults to evolve.
+**v0.1.10** — `contextpack init` writes drop-in Cursor rule + skill files so agents know when and how to pack. `--paths-from` packs an explicit path list (file or stdin) under the token budget. CLI: pack, init, ignore, budget, formats, `--list`, `--diff`. Reproducible naive-vs-packed benchmark. Tests pass. Token counts remain characters/4 estimates. Expect ranking heuristics and ignore defaults to evolve.
 
 ## License
 

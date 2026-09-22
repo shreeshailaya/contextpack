@@ -27,6 +27,16 @@ If you install globally and `contextpack` is not recognized, add your npm prefix
 
 > **Note:** The package is scoped `@shree_vitkar/contextpack` but the CLI binary name is `contextpack`.
 
+## Install into a repo
+
+Write drop-in Cursor rule + skill files so agents know when and how to run contextpack (no long docs page required):
+
+```bash
+npx -p @shree_vitkar/contextpack contextpack init
+```
+
+Creates `.cursor/rules/contextpack.mdc` and `skills/contextpack/SKILL.md` if they are missing. Pass `--force` to overwrite, `--agents` to create or append a short `AGENTS.md` section.
+
 ## When to use contextpack
 
 Use contextpack when an agent needs:

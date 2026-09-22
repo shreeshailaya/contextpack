@@ -6,6 +6,7 @@ import { pack } from "./pack/pack.js";
 import { formatPack, formatList } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
 import { parsePathList, readPathsFromSource } from "./pack/pathsFrom.js";
+import { formatInitSummary, InitError, runInit } from "./init/init.js";
 import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
 function getVersion(): string {
@@ -116,7 +117,54 @@ Notes:
       runPack(targetPath, opts);
     });
 
+  program
+    .command("init")
+    .description("Write drop-in agent integration files (Cursor rule + skill)")
+    .argument("[path]", "directory to write into", ".")
+    .option("--force", "overwrite existing integration files", false)
+    .option("--agents", "create or append a short AGENTS.md section", false)
+    .option("-q, --quiet", "suppress stderr summary", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  $ contextpack init                            # Cursor rule + skill in cwd
+  $ contextpack init ./my-repo                  # Write into a path
+  $ contextpack init --agents                   # Also create/append AGENTS.md
+  $ contextpack init --force                    # Overwrite existing files
+
+Writes (create only if missing unless --force):
+  .cursor/rules/contextpack.mdc
+  skills/contextpack/SKILL.md
+`,
+    )
+    .action((targetPath: string, opts: InitCliOpts) => {
+      runInitCommand(targetPath, opts);
+    });
+
   return program;
+}
+
+interface InitCliOpts {
+  force?: boolean;
+  agents?: boolean;
+  quiet?: boolean;
+}
+
+function runInitCommand(targetPath: string, opts: InitCliOpts): void {
+  try {
+    const result = runInit(targetPath, {
+      force: opts.force,
+      agents: opts.agents,
+    });
+    if (!opts.quiet) {
+      console.error(formatInitSummary(result));
+    }
+  } catch (err) {
+    const message = err instanceof InitError || err instanceof Error ? err.message : String(err);
+    console.error(`error: ${message}`);
+    process.exitCode = 1;
+  }
 }
 
 interface PackCliOpts {

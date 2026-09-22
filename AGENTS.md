@@ -48,6 +48,7 @@ src/
   cli.ts              # Commander CLI entry
   index.ts            # bin entry
   types.ts            # TypeScript interfaces
+  init/               # contextpack init (agent drop-in files)
   pack/
     pack.ts           # Main orchestrator
     collect.ts        # File discovery + gitignore; optional --paths-from list
