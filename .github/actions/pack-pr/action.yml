@@ -1,0 +1,193 @@
+name: contextpack pack-pr
+description: Pack PR changes with contextpack (--since base --diff) and post a budgeted digest comment.
+author: Shreeshail Vitkar
+
+inputs:
+  version:
+    description: npm version of @shree_vitkar/contextpack to install and run (e.g. 0.1.10).
+    required: false
+    default: "0.1.10"
+  budget:
+    description: Token budget (characters/4 estimate). 0 = unlimited. Default matches the PR-review recipe.
+    required: false
+    default: "12000"
+  path:
+    description: Directory to pack, relative to the workspace.
+    required: false
+    default: "."
+  since:
+    description: Git ref to pack changes since. Defaults to github.event.pull_request.base.sha.
+    required: false
+    default: ""
+  diff:
+    description: Pack unified diffs of tracked changes (contextpack --diff). Set false for full file bodies.
+    required: false
+    default: "true"
+  format:
+    description: Digest format written to the artifact (md | json | plain).
+    required: false
+    default: "md"
+  artifact-name:
+    description: Name of the uploaded workflow artifact.
+    required: false
+    default: "contextpack-pr"
+  artifact-path:
+    description: Workspace-relative path for the digest file.
+    required: false
+    default: "contextpack-pr.md"
+  comment:
+    description: Post or update a pull_request comment with the summary. No-op on other events.
+    required: false
+    default: "true"
+  comment-file-limit:
+    description: How many included files to show before collapsing the rest in a details block.
+    required: false
+    default: "12"
+  extra-args:
+    description: Extra contextpack pack arguments, word-split (e.g. --ignore tests/**).
+    required: false
+    default: ""
+  fail-on-empty:
+    description: Fail the job when the pack includes no files.
+    required: false
+    default: "false"
+  fail-on-error:
+    description: Fail the job on pack errors (not a git repo, invalid ref, install/pack failure).
+    required: false
+    default: "false"
+  node-version:
+    description: Node.js version installed before npx.
+    required: false
+    default: "20"
+  github-token:
+    description: Token used to create or update the PR comment.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  digest-path:
+    description: Path to the digest file (if written).
+    value: ${{ steps.pack.outputs.digest-path }}
+  files:
+    description: Number of files included in the pack.
+    value: ${{ steps.pack.outputs.files }}
+  tokens:
+    description: Approximate token count (characters/4).
+    value: ${{ steps.pack.outputs.tokens }}
+  since:
+    description: Git ref that was packed against.
+    value: ${{ steps.pack.outputs.since }}
+  empty:
+    description: Whether the pack included no files (true/false).
+    value: ${{ steps.pack.outputs.empty }}
+  ok:
+    description: Whether contextpack pack succeeded (true/false).
+    value: ${{ steps.pack.outputs.ok }}
+  error:
+    description: Error message when ok is false.
+    value: ${{ steps.pack.outputs.error }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Pack PR changes
+      id: pack
+      shell: bash
+      env:
+        CONTEXTPACK_VERSION: ${{ inputs.version }}
+        CONTEXTPACK_BUDGET: ${{ inputs.budget }}
+        CONTEXTPACK_PATH: ${{ inputs.path }}
+        CONTEXTPACK_SINCE: ${{ inputs.since }}
+        CONTEXTPACK_FORMAT: ${{ inputs.format }}
+        CONTEXTPACK_OUT: ${{ inputs.artifact-path }}
+        CONTEXTPACK_DIFF: ${{ inputs.diff }}
+        CONTEXTPACK_EXTRA_ARGS: ${{ inputs.extra-args }}
+        CONTEXTPACK_LIST_OUT: contextpack-pr-list.json
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+      run: bash "${{ github.action_path }}/pack.sh"
+
+    - name: Build PR comment
+      id: comment-body
+      if: inputs.comment == 'true'
+      shell: bash
+      run: |
+        node "${{ github.action_path }}/comment.mjs" \
+          --list contextpack-pr-list.json \
+          --out contextpack-pr-comment.md \
+          --since "${{ steps.pack.outputs.since }}" \
+          --budget "${{ inputs.budget }}" \
+          --artifact-name "${{ inputs.artifact-name }}" \
+          --artifact-path "${{ inputs.artifact-path }}" \
+          --error "${{ steps.pack.outputs.error }}" \
+          --empty "${{ steps.pack.outputs.empty }}" \
+          --ok "${{ steps.pack.outputs.ok }}" \
+          --diff "${{ inputs.diff }}" \
+          --version "${{ inputs.version }}" \
+          --top-limit "${{ inputs.comment-file-limit }}"
+
+    - name: Post or update PR comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        COMMENT_PATH: contextpack-pr-comment.md
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- contextpack-pr -->';
+          const body = fs.readFileSync(process.env.COMMENT_PATH, 'utf8');
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner,
+            repo,
+            issue_number,
+            per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner,
+              repo,
+              comment_id: existing.id,
+              body,
+            });
+            core.info(`Updated comment ${existing.id}`);
+          } else {
+            const created = await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body,
+            });
+            core.info(`Created comment ${created.data.id}`);
+          }
+
+    - name: Upload digest artifact
+      if: steps.pack.outputs.digest-exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.artifact-path }}
+        if-no-files-found: warn
+
+    - name: Fail when configured
+      if: >
+        (inputs.fail-on-empty == 'true' && steps.pack.outputs.empty == 'true') ||
+        (inputs.fail-on-error == 'true' && steps.pack.outputs.ok == 'false')
+      shell: bash
+      run: |
+        if [ "${{ inputs.fail-on-error }}" = "true" ] && [ "${{ steps.pack.outputs.ok }}" = "false" ]; then
+          echo "::error::contextpack pack failed: ${{ steps.pack.outputs.error }}"
+          exit 1
+        fi
+        if [ "${{ inputs.fail-on-empty }}" = "true" ] && [ "${{ steps.pack.outputs.empty }}" = "true" ]; then
+          echo "::error::contextpack pack was empty (fail-on-empty is true)"
+          exit 1
+        fi
