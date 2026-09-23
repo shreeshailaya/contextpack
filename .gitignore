@@ -31,3 +31,6 @@ npm-debug.log*
 *.context.md
 *.context.json
 *.context.txt
+contextpack-pr.md
+contextpack-pr-list.json
+contextpack-pr-comment.md

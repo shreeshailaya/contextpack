@@ -155,6 +155,31 @@ Add `--agents` to create or append a short `AGENTS.md` section.
 
 See [docs/agents.md](./docs/agents.md) for integration patterns.
 
+## GitHub Action (PR digest)
+
+On `pull_request`, pack only what changed since the base SHA (`--since` + `--diff`) and post a short comment. The full digest is a workflow artifact — not a dump of the whole repo.
+
+```yaml
+# .github/workflows/contextpack-pr.yml
+name: contextpack PR
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: shreeshailaya/contextpack/.github/actions/pack-pr@master
+```
+
+This repo runs the same job from [`.github/workflows/contextpack-pr.yml`](./.github/workflows/contextpack-pr.yml) (local `uses: ./.github/actions/pack-pr`). Copy the Action directory into another repo if you do not want to reference this one.
+
+Inputs, permissions, and failure modes: [docs/github-action.md](./docs/github-action.md).
+
 ## Token estimates
 
 Token counts are **estimates**: `characters / 4`. This is good enough for budgeting and fits most tokenizers within ~20%. It is not a model-specific tokenizer—don't use it for billing or exact context window calculations.
@@ -202,6 +227,7 @@ src/
 tests/                # Vitest
 scripts/
   benchmark.ts        # Naive dump vs packed budgets
+.github/actions/pack-pr/  # Composite Action: PR --since --diff digest
 ```
 
 ## Development

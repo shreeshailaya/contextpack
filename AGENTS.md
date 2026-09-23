@@ -41,6 +41,8 @@ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
 
 See [docs/agents.md](./docs/agents.md) for detailed integration patterns.
 
+PR review on GitHub: a composite Action packs `--since <base> --diff` and posts a comment. See [docs/github-action.md](./docs/github-action.md).
+
 ## Project structure
 
 ```
@@ -60,6 +62,7 @@ src/
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest tests
 docs/                 # Documentation
+.github/actions/pack-pr/  # Composite Action: PR --since --diff digest
 ```
 
 ## Development commands

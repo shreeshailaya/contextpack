@@ -223,6 +223,8 @@ contextpack pack . --since main --diff --budget 12000 -o changes.md
 # 4. Agent provides targeted feedback
 ```
 
+On GitHub, the same recipe is a composite Action: it packs `--since <PR base SHA> --diff` on `pull_request`, uploads the digest as an artifact, and posts (or updates) a short comment. See [docs/github-action.md](./github-action.md).
+
 ## Agent ignore files
 
 Agents already declare what not to feed models via ignore files. When packing, contextpack applies these **optional** files from the pack root (same place as `.gitignore`, not nested directories) if they exist:
