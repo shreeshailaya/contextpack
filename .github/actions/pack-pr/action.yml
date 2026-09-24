@@ -4,9 +4,9 @@ author: Shreeshail Vitkar
 
 inputs:
   version:
-    description: npm version of @shree_vitkar/contextpack to install and run (e.g. 0.1.10).
+    description: npm version of @shree_vitkar/contextpack to install and run (e.g. 0.1.11).
     required: false
-    default: "0.1.10"
+    default: "0.1.11"
   budget:
     description: Token budget (characters/4 estimate). 0 = unlimited. Default matches the PR-review recipe.
     required: false
