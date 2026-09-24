@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createProgram } from "../src/cli.js";
 import { pack } from "../src/pack/pack.js";
 import { formatList } from "../src/pack/format.js";
 
 const temps: string[] = [];
+const stdinTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
 
 function tmpProject(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "contextpack-cli-"));
@@ -19,7 +20,21 @@ function tmpProject(files: Record<string, string>): string {
   return dir;
 }
 
+beforeEach(() => {
+  // In-process pack() must not treat the test runner's stdin as a path list.
+  Object.defineProperty(process.stdin, "isTTY", {
+    configurable: true,
+    enumerable: true,
+    value: true,
+  });
+});
+
 afterEach(() => {
+  if (stdinTtyDescriptor) {
+    Object.defineProperty(process.stdin, "isTTY", stdinTtyDescriptor);
+  } else {
+    delete (process.stdin as { isTTY?: boolean }).isTTY;
+  }
   for (const d of temps.splice(0)) {
     fs.rmSync(d, { recursive: true, force: true });
   }

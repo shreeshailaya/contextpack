@@ -29,6 +29,24 @@ export function parsePathList(text: string): string[] {
 }
 
 /**
+ * Decide which `--paths-from` source to read.
+ *
+ * - Explicit `--paths-from <file>` or `--paths-from -` always wins.
+ * - When the flag is omitted and stdin is not a TTY (pipe or redirect),
+ *   treat it as `--paths-from -`.
+ * - Interactive terminals (`isTTY === true`) never auto-read stdin, so
+ *   `contextpack pack .` still walks the tree and does not hang.
+ */
+export function resolvePathsFromOption(
+  pathsFrom: string | undefined,
+  stdinIsTTY: boolean | undefined = process.stdin.isTTY,
+): string | undefined {
+  if (pathsFrom != null) return pathsFrom;
+  if (stdinIsTTY === true) return undefined;
+  return "-";
+}
+
+/**
  * Read `--paths-from` source: a filesystem path, or `-` for stdin.
  */
 export function readPathsFromSource(source: string): string {

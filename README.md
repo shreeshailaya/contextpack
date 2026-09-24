@@ -83,9 +83,9 @@ contextpack pack . --since HEAD~1 --list
 contextpack pack . --since main --diff
 
 # Pack only files matching a search (agent workflow)
-rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
 
-# From a file
+# Explicit path list from a file (does not also read stdin)
 contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
 
 # Preview the selected paths under budget
@@ -94,9 +94,9 @@ contextpack pack . --paths-from paths.txt --list
 
 ## What it does
 
-1. Walks the directory tree, respecting `.gitignore` and optional agent ignore files at the pack root (`.cursorignore`, `.aiignore`, `.copilotignore`) — or, with `--paths-from`, resolves only an explicit path list (no tree walk)
+1. Walks the directory tree, respecting `.gitignore` and optional agent ignore files at the pack root (`.cursorignore`, `.aiignore`, `.copilotignore`) — or, with a piped path list / `--paths-from`, resolves only an explicit path list (no tree walk)
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
-3. Optionally filters to only git-changed files with `--since`. Combined with `--paths-from`, packs the intersection
+3. Optionally filters to only git-changed files with `--since`. Combined with a piped list or `--paths-from`, packs the intersection
 4. With `--diff`, packs unified diffs of those changes instead of full file bodies (untracked files stay full content)
 5. Ranks files by signal (README and manifests first, tests last)
 6. Fits within your token budget, keeping the highest-value files
@@ -123,7 +123,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `-l, --list` | Preview which files would be included without dumping contents |
 | `-s, --since <ref>` | Only include files changed since git ref (e.g. `main`, `HEAD~1`) |
 | `--diff` | With `--since`, pack unified diffs of tracked changes instead of full files |
-| `--paths-from <file>` | Pack only paths listed in a file (one per line; `-` reads stdin). No tree walk |
+| `--paths-from <file>` | Pack only paths listed in a file (one per line; `-` reads stdin). Piped stdin without this flag is the same as `-`. No tree walk |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
@@ -243,7 +243,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.10** — `contextpack init` writes drop-in Cursor rule + skill files so agents know when and how to pack. `--paths-from` packs an explicit path list (file or stdin) under the token budget. CLI: pack, init, ignore, budget, formats, `--list`, `--diff`. Reproducible naive-vs-packed benchmark. Tests pass. Token counts remain characters/4 estimates. Expect ranking heuristics and ignore defaults to evolve.
+**v0.1.11** — Piped path lists (non-TTY stdin) pack like `--paths-from -` without the flag. Interactive `pack .` still walks the tree. `--paths-from` remains the explicit form. `contextpack init` writes drop-in Cursor rule + skill files. CLI: pack, init, ignore, budget, formats, `--list`, `--diff`. Reproducible naive-vs-packed benchmark. Tests pass. Token counts remain characters/4 estimates. Expect ranking heuristics and ignore defaults to evolve.
 
 ## License
 
