@@ -5,7 +5,7 @@ import { Command } from "commander";
 import { pack } from "./pack/pack.js";
 import { formatPack, formatList } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
-import { parsePathList, readPathsFromSource } from "./pack/pathsFrom.js";
+import { parsePathList, readPathsFromSource, resolvePathsFromOption } from "./pack/pathsFrom.js";
 import { formatInitSummary, InitError, runInit } from "./init/init.js";
 import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
@@ -84,7 +84,7 @@ export function createProgram(): Command {
     )
     .option(
       "--paths-from <file>",
-      "pack only paths listed in a file (one per line; - reads stdin). Does not walk the tree",
+      "pack only paths listed in a file (one per line; - reads stdin). Piped stdin without this flag is the same as -. Does not walk the tree",
     )
     .addHelpText(
       "after",
@@ -101,16 +101,18 @@ Examples:
   $ contextpack pack . --since main             # Only files changed since main branch
   $ contextpack pack . --since HEAD~1 --list    # Preview changes from last commit
   $ contextpack pack . --since main --diff      # Pack unified diffs of changes since main
-  $ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+  $ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
   $ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
   $ contextpack pack . --paths-from paths.txt --list
+  $ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
   Ignore layers: built-in defaults, then optional root .gitignore / .cursorignore / .aiignore / .copilotignore, then CLI --ignore. --include wins over ignores.
   --since requires git and a valid ref; includes modified, added, and untracked files.
   --diff requires --since. Tracked changes are packed as unified diffs; untracked files stay full content.
-  --paths-from does not walk the tree. Paths are relative to [path]; absolute paths and .. escapes are skipped (stderr note unless --quiet). Combine with --since for the intersection.
+  A piped or redirected path list (non-TTY stdin) is treated as --paths-from - when the flag is omitted. Interactive terminals still walk the tree.
+  --paths-from does not walk the tree. Paths are relative to [path]; absolute paths and .. escapes are skipped (stderr note unless --quiet). Combine with --since for the intersection. Explicit --paths-from <file> does not also read stdin.
 `,
     )
     .action((targetPath: string, opts) => {
@@ -206,11 +208,12 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
   }
 
   let listedPaths: string[] | undefined;
-  if (opts.pathsFrom != null) {
+  const pathsSource = resolvePathsFromOption(opts.pathsFrom);
+  if (pathsSource != null) {
     try {
-      listedPaths = parsePathList(readPathsFromSource(opts.pathsFrom));
+      listedPaths = parsePathList(readPathsFromSource(pathsSource));
     } catch (err) {
-      const where = opts.pathsFrom === "-" ? "stdin" : opts.pathsFrom;
+      const where = pathsSource === "-" ? "stdin" : pathsSource;
       const message = err instanceof Error ? err.message : String(err);
       console.error(`error: cannot read --paths-from ${where}: ${message}`);
       process.exitCode = 1;

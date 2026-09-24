@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createProgram } from "../src/cli.js";
 import { collectFiles } from "../src/pack/collect.js";
 import { pack } from "../src/pack/pack.js";
-import { parsePathList, resolveListedPath } from "../src/pack/pathsFrom.js";
+import { parsePathList, resolveListedPath, resolvePathsFromOption } from "../src/pack/pathsFrom.js";
 
 const temps: string[] = [];
 
@@ -83,6 +83,29 @@ async function runCli(
   process.exitCode = prevExit;
   return { stdout, stderr, exitCode };
 }
+
+describe("resolvePathsFromOption", () => {
+  it("walks the tree on a TTY when --paths-from is omitted", () => {
+    expect(resolvePathsFromOption(undefined, true)).toBeUndefined();
+  });
+
+  it("treats non-TTY stdin as --paths-from - when the flag is omitted", () => {
+    expect(resolvePathsFromOption(undefined, false)).toBe("-");
+    expect(resolvePathsFromOption(undefined, undefined)).toBe("-");
+  });
+
+  it("lets an explicit file win even when stdin is a pipe", () => {
+    expect(resolvePathsFromOption("paths.txt", false)).toBe("paths.txt");
+    expect(resolvePathsFromOption("changed.txt", undefined)).toBe("changed.txt");
+    expect(resolvePathsFromOption("paths.txt", true)).toBe("paths.txt");
+  });
+
+  it("keeps explicit --paths-from - unchanged", () => {
+    expect(resolvePathsFromOption("-", false)).toBe("-");
+    expect(resolvePathsFromOption("-", true)).toBe("-");
+    expect(resolvePathsFromOption("-", undefined)).toBe("-");
+  });
+});
 
 describe("parsePathList", () => {
   it("trims lines and skips blanks and # comments", () => {
@@ -326,6 +349,15 @@ describe("CLI --paths-from", () => {
     const packCmd = program.commands.find((c) => c.name() === "pack");
     const opt = packCmd?.options.find((o) => o.long === "--paths-from");
     expect(opt).toBeDefined();
+    expect(opt?.description).toMatch(/piped stdin/i);
+  });
+
+  it("help shows the short pipe form first and keeps --paths-from explicit", async () => {
+    const { stdout, stderr } = await runCli(["pack", "--help"]);
+    const help = `${stdout}${stderr}`;
+    expect(help).toContain("rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000");
+    expect(help).toContain("--paths-from changed.txt");
+    expect(help).toMatch(/piped or redirected path list/i);
   });
 
   it("packs from a temp file of paths", async () => {
@@ -405,17 +437,7 @@ describe("CLI --paths-from", () => {
       "keep.ts": "export const keep = 1;\n",
       "skip.ts": "export const skip = 1;\n",
     });
-    const tsx = path.resolve("node_modules/.bin/tsx");
-    const entry = path.resolve("src/index.ts");
-    const spawned = spawnSync(
-      tsx,
-      [entry, "pack", root, "--paths-from", "-", "--list", "-q"],
-      {
-        input: "# from rg -l\nkeep.ts\n\n",
-        encoding: "utf8",
-        env: { ...process.env },
-      },
-    );
+    const spawned = spawnPack(root, ["--paths-from", "-", "--list", "-q"], "# from rg -l\nkeep.ts\n\n");
 
     expect(spawned.status).toBe(0);
     expect(spawned.stdout).toContain("keep.ts");
@@ -423,3 +445,89 @@ describe("CLI --paths-from", () => {
     expect(spawned.stdout).not.toContain("export const keep");
   });
 });
+
+describe("CLI auto-detect piped stdin", () => {
+  it("packs piped paths without --paths-from (same as --paths-from -)", () => {
+    const root = tmpProject({
+      "keep.ts": "export const keep = 1;\n",
+      "skip.ts": "export const skip = 1;\n",
+    });
+    const spawned = spawnPack(root, ["--list", "-q"], "# from rg -l\nkeep.ts\n\n");
+
+    expect(spawned.status).toBe(0);
+    expect(spawned.stdout).toContain("keep.ts");
+    expect(spawned.stdout).toContain("included");
+    expect(spawned.stdout).not.toContain("skip.ts");
+    expect(spawned.stdout).not.toContain("export const keep");
+  });
+
+  it("empty piped stdin packs no files and does not hang", () => {
+    const root = tmpProject({
+      "keep.ts": "export const keep = 1;\n",
+      "skip.ts": "export const skip = 1;\n",
+    });
+    const spawned = spawnPack(root, ["--list", "-q", "--budget", "0"], "");
+
+    expect(spawned.status).toBe(0);
+    expect(spawned.signal).toBeNull();
+    expect(spawned.stdout).toContain("contextpack --list preview");
+    expect(spawned.stdout).not.toContain("keep.ts");
+    expect(spawned.stdout).not.toContain("skip.ts");
+  });
+
+  it("explicit --paths-from file wins and does not consume stdin", () => {
+    const root = tmpProject({
+      "keep.ts": "export const keep = 1;\n",
+      "skip.ts": "export const skip = 1;\n",
+    });
+    const listFile = path.join(root, "paths.txt");
+    fs.writeFileSync(listFile, "keep.ts\n", "utf8");
+
+    const spawned = spawnPack(
+      root,
+      ["--paths-from", listFile, "--list", "-q"],
+      "skip.ts\n",
+    );
+
+    expect(spawned.status).toBe(0);
+    expect(spawned.stdout).toContain("keep.ts");
+    expect(spawned.stdout).not.toContain("skip.ts");
+  });
+
+  it("combines a piped list with --since like --paths-from", () => {
+    const dir = tmpProject({
+      "old.ts": "export const old = 1;\n",
+      "keep.ts": "export const keep = 1;\n",
+    });
+    initGitRepo(dir);
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    fs.writeFileSync(path.join(dir, "keep.ts"), "export const keep = 2;\n");
+    fs.writeFileSync(path.join(dir, "changed.ts"), "export const changed = 1;\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "changes");
+
+    const spawned = spawnPack(dir, ["--since", "HEAD~1", "--list", "-q"], "keep.ts\nold.ts\n");
+
+    expect(spawned.status).toBe(0);
+    expect(spawned.stdout).toContain("keep.ts");
+    expect(spawned.stdout).not.toContain("old.ts");
+    expect(spawned.stdout).not.toContain("changed.ts");
+  });
+});
+
+function spawnPack(
+  root: string,
+  args: string[],
+  input: string,
+): ReturnType<typeof spawnSync> {
+  const tsx = path.resolve("node_modules/.bin/tsx");
+  const entry = path.resolve("src/index.ts");
+  return spawnSync(tsx, [entry, "pack", root, ...args], {
+    input,
+    encoding: "utf8",
+    env: { ...process.env },
+    timeout: 15_000,
+  });
+}

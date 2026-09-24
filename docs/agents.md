@@ -45,7 +45,7 @@ Use contextpack when an agent needs:
 - **Refactor context** — Seeing which files exist and how they relate before a large change
 - **Review preparation** — Getting a snapshot of what changed or what exists in a directory
 - **PR review context** — Use `--since main --diff` to pack patches of files changed in a PR branch
-- **Search-scoped packing** — Pipe `rg -l` into `--paths-from -` when you already know the relevant files
+- **Search-scoped packing** — Pipe `rg -l` into `contextpack pack` when you already know the relevant files (`--paths-from` is the explicit form)
 - **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
 
 ## Basic usage
@@ -146,15 +146,15 @@ This includes modified, added, and untracked files. Deleted files are skipped (n
 
 `--diff` requires `--since`. Tracked files are packed as unified diffs (`git diff <ref> -- <file>`). Untracked files still pack as full content — there is no prior blob to diff against. Markdown fences diffs as `diff`; JSON sets `kind` to `"diff"` or `"file"` so agents can tell them apart.
 
-### Explicit path lists with --paths-from
+### Explicit path lists (piped stdin or --paths-from)
 
-When an agent already knows the relevant files (`rg -l`, `git diff --name-only`, a previous `--list`), pipe that list instead of walking the tree:
+When an agent already knows the relevant files (`rg -l`, `git diff --name-only`, a previous `--list`), pipe that list instead of walking the tree. A non-TTY stdin is treated as `--paths-from -`; interactive terminals still walk the tree.
 
 ```bash
 # Pack only files matching a search (agent workflow)
-rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
 
-# From a file
+# Explicit --paths-from (file, or - for stdin). A file does not also read stdin.
 contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
 
 # Preview
@@ -163,7 +163,7 @@ contextpack pack . --paths-from paths.txt --list
 
 Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, and `--quiet` still apply.
 
-Combined with `--since`, contextpack packs the **intersection** (listed paths that also changed since the ref). An empty intersection is a successful empty pack, not an error. With `--paths-from` + `--since` + `--diff`, only intersecting tracked files become diffs; untracked intersecting paths stay full content.
+Combined with `--since`, contextpack packs the **intersection** (listed paths that also changed since the ref). An empty intersection is a successful empty pack, not an error. With a path list + `--since` + `--diff`, only intersecting tracked files become diffs; untracked intersecting paths stay full content.
 
 ## Budget guidelines
 
@@ -194,7 +194,7 @@ This ensures agents see the most important context first.
 # 1. Agent receives task: "Refactor the auth module to use JWT"
 
 # 2. Agent finds relevant files, then packs only those (under budget)
-rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000 -o auth-context.md
+rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000 -o auth-context.md
 
 #    Or pack a directory when the search set isn't known yet:
 #    contextpack pack ./src/auth --budget 8000 -o auth-context.md
@@ -243,7 +243,7 @@ Same gitignore syntax as `.gitignore`. Unreadable files are skipped. Layer order
 
 - **Start with default budget** — 16k tokens is enough for most orientation tasks
 - **Pack incrementally** — Pack specific directories as you need them, not the whole repo upfront
-- **Pipe a path list** — When `rg -l` or `git diff --name-only` already found the files, `--paths-from -` avoids walking the tree
+- **Pipe a path list** — When `rg -l` or `git diff --name-only` already found the files, pipe them into `pack` (or use `--paths-from`) to avoid walking the tree
 - **Use JSON for parsing** — If your agent needs to iterate over files, use `--format json`
 - **Check truncated files** — The digest lists files that didn't fit; pack them separately if needed
 - **Reuse existing agent ignores** — Drop a `.cursorignore` (or `.aiignore` / `.copilotignore`) at the pack root; no extra flags needed

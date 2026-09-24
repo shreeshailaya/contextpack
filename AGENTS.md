@@ -36,7 +36,7 @@ contextpack pack ./src --budget 12000
 contextpack pack . --format json --budget 8000
 
 # Pack only files an agent already found (e.g. ripgrep)
-rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
 ```
 
 See [docs/agents.md](./docs/agents.md) for detailed integration patterns.

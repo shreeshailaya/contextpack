@@ -36,7 +36,7 @@ jobs:
 
       - uses: shreeshailaya/contextpack/.github/actions/pack-pr@master
         with:
-          version: "0.1.10"
+          version: "0.1.11"
           budget: "12000"
 ```
 
@@ -59,7 +59,7 @@ Artifact upload uses the default `GITHUB_TOKEN`. If you set `comment: false`, yo
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `version` | `0.1.10` | npm version of `@shree_vitkar/contextpack` installed into a temp prefix |
+| `version` | `0.1.11` | npm version of `@shree_vitkar/contextpack` installed into a temp prefix |
 | `budget` | `12000` | Token budget (`chars/4`). `0` = unlimited |
 | `path` | `.` | Directory to pack |
 | `since` | PR base SHA | Git ref for `--since`. Falls back to `github.event.pull_request.base.sha`, then `origin/<base.ref>` |
