@@ -1,7 +1,8 @@
 import path from "node:path";
-import { collectFiles, type CollectedFile } from "./collect.js";
+import { collectFiles, readTextFile, type CollectedFile } from "./collect.js";
 import { selectUnderBudget } from "./budget.js";
 import { getUnifiedDiffs } from "./git.js";
+import { redactSecrets } from "./redact.js";
 import type { PackOptions, PackResult } from "../types.js";
 
 export interface PackError {
@@ -16,7 +17,7 @@ export type PackReturn =
 /**
  * Pack a directory into a token-budgeted context digest.
  *
- * Architecture note: collect → budget-select → (format in CLI layer).
+ * Architecture note: collect → (diff) → redact → budget-select → (format in CLI).
  * `--paths-from` skips the tree walk and collects only the listed paths.
  * Future: ranking plugins, streaming writers, remote sources can plug in here.
  *
@@ -61,6 +62,9 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
     }
   }
 
+  const redact = options.redact !== false;
+  const redacted = redact ? applyRedaction(collected) : 0;
+
   const budget = options.budget ?? null;
   const selection = selectUnderBudget(collected, budget);
 
@@ -78,6 +82,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
       ignored: ignoredCount,
       truncated: selection.truncated.length,
       skipped: selection.skipped.length,
+      redacted,
     },
   };
 
@@ -129,6 +134,22 @@ function applyDiffContents(
   }
 
   return null;
+}
+
+/**
+ * Redact obvious secret-looking substrings after content is loaded
+ * (full files and unified diffs) and before token counting / budget.
+ */
+function applyRedaction(collected: CollectedFile[]): number {
+  let total = 0;
+  for (const file of collected) {
+    const raw = file.content ?? readTextFile(file.absPath);
+    if (raw === null) continue;
+    const result = redactSecrets(raw);
+    file.content = result.content;
+    total += result.count;
+  }
+  return total;
 }
 
 export type { PackOptions, PackResult };

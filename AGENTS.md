@@ -59,6 +59,7 @@ src/
     naive.ts          # Naive dump (benchmark baseline)
     format.ts         # Output formatters (md/json/plain)
     pathsFrom.ts      # --paths-from parse + path safety
+    redact.ts         # Best-effort secret redaction (not a scanner)
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest tests
 docs/                 # Documentation
@@ -81,3 +82,4 @@ npm run dev          # Run with tsx (no build needed)
 - Token counts are estimates (chars/4) — don't claim precision
 - Priority ranking in `budget.ts` affects which files win under tight budgets
 - Default ignores in `ignore/defaults.ts` filter noise (node_modules, lockfiles, etc.)
+- Content redaction in `redact.ts` is high-precision and best-effort — do not turn it into a scanner

@@ -90,6 +90,9 @@ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
 
 # Preview the selected paths under budget
 contextpack pack . --paths-from paths.txt --list
+
+# Keep raw values (trusted local debug / inspect a false positive)
+contextpack pack . --no-redact
 ```
 
 ## What it does
@@ -101,7 +104,8 @@ contextpack pack . --paths-from paths.txt --list
 5. Ranks files by signal (README and manifests first, tests last)
 6. Fits within your token budget, keeping the highest-value files
 7. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
-8. Outputs a structured digest (Markdown, JSON, or plain text)
+8. Redacts obvious secret-looking substrings in file bodies and diffs (best-effort; `--no-redact` to disable)
+9. Outputs a structured digest (Markdown, JSON, or plain text)
 
 Ignore layers (gitignore syntax), applied in this order:
 
@@ -124,6 +128,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `-s, --since <ref>` | Only include files changed since git ref (e.g. `main`, `HEAD~1`) |
 | `--diff` | With `--since`, pack unified diffs of tracked changes instead of full files |
 | `--paths-from <file>` | Pack only paths listed in a file (one per line; `-` reads stdin). Piped stdin without this flag is the same as `-`. No tree walk |
+| `--no-redact` | Disable best-effort secret redaction (keep raw values; useful to inspect a false positive locally) |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
@@ -180,6 +185,14 @@ This repo runs the same job from [`.github/workflows/contextpack-pr.yml`](./.git
 
 Inputs, permissions, and failure modes: [docs/github-action.md](./docs/github-action.md).
 
+## Secrets
+
+Path ignores already skip `.env`, `*.pem`, and similar files. Packed **contents** (full files and unified diffs) also get **best-effort redaction** of obvious secret-looking substrings: PEM private-key blocks, GitHub / OpenAI / Slack / AWS-access-key prefixes, `Bearer` tokens, and common `api_key=` / `password=` / `token=` assignments.
+
+This is not a security scanner. Short placeholders (`YOUR_API_KEY`, `changeme`) are left alone. The digest summary reports `redacted: N` when anything was replaced. Use `--no-redact` when you need the raw text (for example, to inspect a false positive locally). Do not treat a digest as proof that secrets are absent.
+
+`--list` still has no file bodies, so it does not redact snippets (there are none). Token estimates in `--list` match a real pack, including redaction.
+
 ## Token estimates
 
 Token counts are **estimates**: `characters / 4`. This is good enough for budgeting and fits most tokenizers within ~20%. It is not a model-specific tokenizer—don't use it for billing or exact context window calculations.
@@ -223,6 +236,7 @@ src/
     format.ts         # md | json | plain output
     pack.ts           # Orchestrator
     pathsFrom.ts      # --paths-from parse + path safety
+    redact.ts         # Best-effort secret redaction
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest
 scripts/
@@ -243,7 +257,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.11** — Piped path lists (non-TTY stdin) pack like `--paths-from -` without the flag. Interactive `pack .` still walks the tree. `--paths-from` remains the explicit form. `contextpack init` writes drop-in Cursor rule + skill files. CLI: pack, init, ignore, budget, formats, `--list`, `--diff`. Reproducible naive-vs-packed benchmark. Tests pass. Token counts remain characters/4 estimates. Expect ranking heuristics and ignore defaults to evolve.
+**v0.1.12** — Best-effort secret redaction in packed file bodies and diffs (default on; `--no-redact` to disable). Not a security scanner; path ignores for `.env` / `*.pem` are unchanged. Digest stats and stderr report `redacted: N`. Piped path lists, `contextpack init`, `--list`, `--diff` unchanged. Token counts remain characters/4 estimates.
 
 ## License
 

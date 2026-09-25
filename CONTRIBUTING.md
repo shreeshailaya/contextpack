@@ -19,7 +19,7 @@ npm run build
 
 ## Design principles
 
-1. **Honest defaults** — ignore noise and secrets by default; document token estimates as estimates.
+1. **Honest defaults** — ignore noise and secrets by default; best-effort redaction of obvious secret-looking substrings (not a scanner); document token estimates as estimates.
 2. **Both audiences** — markdown should stay readable for humans; JSON should stay stable for tools.
 3. **Small modules** — prefer extending `collect` / `budget` / `format` over growing the CLI surface.
 4. **No surprise network** — packing is local filesystem only unless a future feature opts in explicitly.

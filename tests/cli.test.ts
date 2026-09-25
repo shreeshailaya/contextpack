@@ -250,6 +250,77 @@ describe("CLI", () => {
     expect(stdout).toContain("big.txt");
   });
 
+  it("has --no-redact flag", () => {
+    const program = createProgram();
+    const packCmd = program.commands.find((c) => c.name() === "pack");
+    expect(packCmd).toBeDefined();
+
+    const redactOpt = packCmd!.options.find((o) => o.long === "--no-redact" || o.long === "--redact");
+    expect(redactOpt).toBeDefined();
+  });
+
+  it("redacts secrets by default and reports the count on stderr", async () => {
+    const fakeGithub = "ghp_exampletokenexampletoken";
+    const root = tmpProject({
+      "src/config.ts": `export const token = "${fakeGithub}";\n`,
+    });
+
+    const program = createProgram();
+    program.exitOverride();
+
+    let stdout = "";
+    let stderr = "";
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    const originalError = console.error;
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      stdout += chunk.toString();
+      return true;
+    };
+    console.error = (msg: string) => {
+      stderr += String(msg);
+    };
+
+    try {
+      await program.parseAsync(["node", "contextpack", "pack", root, "--budget", "0"]);
+    } finally {
+      process.stdout.write = originalWrite;
+      console.error = originalError;
+    }
+
+    expect(stdout).toContain("[REDACTED:github-token]");
+    expect(stdout).not.toContain(fakeGithub);
+    expect(stderr).toContain("redacted");
+  });
+
+  it("--no-redact keeps fake secrets in the digest", async () => {
+    const fakeGithub = "ghp_exampletokenexampletoken";
+    const root = tmpProject({
+      "src/config.ts": `export const token = "${fakeGithub}";\n`,
+    });
+
+    const program = createProgram();
+    program.exitOverride();
+
+    let stdout = "";
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    const originalError = console.error;
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      stdout += chunk.toString();
+      return true;
+    };
+    console.error = () => {};
+
+    try {
+      await program.parseAsync(["node", "contextpack", "pack", root, "--budget", "0", "--no-redact"]);
+    } finally {
+      process.stdout.write = originalWrite;
+      console.error = originalError;
+    }
+
+    expect(stdout).toContain(fakeGithub);
+    expect(stdout).not.toContain("[REDACTED:github-token]");
+  });
+
   it("has --diff flag", () => {
     const program = createProgram();
     const packCmd = program.commands.find((c) => c.name() === "pack");

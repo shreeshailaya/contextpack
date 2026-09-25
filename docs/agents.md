@@ -161,7 +161,7 @@ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
 contextpack pack . --paths-from paths.txt --list
 ```
 
-Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, and `--quiet` still apply.
+Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, `--quiet`, and `--no-redact` still apply.
 
 Combined with `--since`, contextpack packs the **intersection** (listed paths that also changed since the ref). An empty intersection is a successful empty pack, not an error. With a path list + `--since` + `--diff`, only intersecting tracked files become diffs; untracked intersecting paths stay full content.
 
@@ -239,6 +239,12 @@ Same gitignore syntax as `.gitignore`. Unreadable files are skipped. Layer order
 
 `--include` still force-includes matched paths over any of those layers.
 
+## Secrets (best-effort)
+
+Path ignores skip `.env`, `*.pem`, and similar files. Packed file bodies and diffs also redact obvious secret-looking substrings (PEM private keys, common token prefixes, `api_key=` assignments). This is **not** a security scanner. `--list` has no bodies, so it does not redact snippets.
+
+Use `--no-redact` only when you need raw values (for example, to inspect a false positive in a trusted local context). The digest reports `redacted: N` when anything was replaced.
+
 ## Tips
 
 - **Start with default budget** — 16k tokens is enough for most orientation tasks
@@ -247,3 +253,4 @@ Same gitignore syntax as `.gitignore`. Unreadable files are skipped. Layer order
 - **Use JSON for parsing** — If your agent needs to iterate over files, use `--format json`
 - **Check truncated files** — The digest lists files that didn't fit; pack them separately if needed
 - **Reuse existing agent ignores** — Drop a `.cursorignore` (or `.aiignore` / `.copilotignore`) at the pack root; no extra flags needed
+- **Treat redaction as a seatbelt** — default-on, best-effort, not a scan. Use `--no-redact` only in a trusted local context

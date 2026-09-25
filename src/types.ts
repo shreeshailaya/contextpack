@@ -44,6 +44,8 @@ export interface PackResult {
     ignored: number;
     truncated: number;
     skipped: number;
+    /** Best-effort redactions applied to packed contents (0 if `--no-redact`). */
+    redacted: number;
   };
   /**
    * Stderr-worthy skip notes (missing / absolute / outside-root listed paths).
@@ -78,6 +80,11 @@ export interface PackOptions {
    * intersection of the list and changed files is packed.
    */
   paths?: string[];
+  /**
+   * Best-effort redaction of obvious secret-looking substrings in file
+   * bodies and diffs. Default true. Not a security scanner.
+   */
+  redact?: boolean;
 }
 
 export interface CollectOptions {
