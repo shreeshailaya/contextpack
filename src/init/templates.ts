@@ -19,6 +19,7 @@ const FLAG_LIST = `Key flags (do not invent others):
 - \`--paths-from -\` — pack only paths from stdin (no tree walk)
 - \`--format json\` — structured output for tooling
 - \`-o <file>\` — write the digest to a file
+- \`--no-redact\` — disable best-effort secret redaction (default on; not a scanner)
 
 Token counts are estimates (characters / 4), not a model tokenizer.`;
 
@@ -94,7 +95,7 @@ ${PREFERRED_INVOKE}
 - PR review: \`${PR_REVIEW_RECIPE}\`
 - Search-scoped: \`${SEARCH_RECIPE}\`
 
-Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--format json\`, \`-o\`. Token counts are estimates (chars/4).
+Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--format json\`, \`-o\`, \`--no-redact\`. Token counts are estimates (chars/4). Secret redaction is best-effort, not a scanner.
 ${AGENTS_SECTION_END}
 `;
 

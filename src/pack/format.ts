@@ -44,8 +44,14 @@ function formatMarkdown(result: PackResult): string {
   if (result.stats.skipped > 0) {
     lines.push(`| Skipped (binary/unreadable) | ${result.stats.skipped} |`);
   }
+  if (result.stats.redacted > 0) {
+    lines.push(`| Redacted (best-effort) | ${result.stats.redacted} |`);
+  }
   lines.push("");
   lines.push(`> Token counts are **estimates** (\`characters / 4\`), not model-specific tokenizer output.`);
+  if (result.stats.redacted > 0) {
+    lines.push(`> Secret redaction is **best-effort**, not a security scan. Use \`--no-redact\` to keep raw values.`);
+  }
   lines.push("");
   lines.push(`## Files`);
   lines.push("");
@@ -207,6 +213,7 @@ export interface ListPreview {
     totalTokens: number;
     discovered: number;
     ignored: number;
+    redacted: number;
   };
 }
 
@@ -257,6 +264,7 @@ function buildListPreview(result: PackResult): ListPreview {
       totalTokens: result.totalTokens,
       discovered: result.stats.discovered,
       ignored: result.stats.ignored,
+      redacted: result.stats.redacted,
     },
   };
 }

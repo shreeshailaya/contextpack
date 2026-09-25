@@ -401,6 +401,36 @@ describe("pack with --since --diff", () => {
     expect(parsed.files.find((f) => f.path === "new.ts")?.content).toBe("export const n = 1;\n");
   });
 
+  it("redacts secret-looking substrings inside packed diffs", () => {
+    const dir = tmpDir();
+    initGitRepo(dir);
+
+    writeFile(dir, "app.ts", "const token = 'none';\n");
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "initial");
+
+    const fake = "ghp_exampletokenexampletoken";
+    writeFile(dir, "app.ts", `const token = '${fake}';\n`);
+    git(dir, "add", ".");
+    git(dir, "commit", "-m", "add fake token");
+
+    const result = pack(dir, { since: "HEAD~1", diff: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const app = result.value.files.find((f) => f.path === "app.ts");
+    expect(app?.kind).toBe("diff");
+    expect(app?.content).toContain("[REDACTED:github-token]");
+    expect(app?.content).not.toContain(fake);
+    expect(result.value.stats.redacted).toBeGreaterThan(0);
+
+    const raw = pack(dir, { since: "HEAD~1", diff: true, redact: false });
+    expect(raw.ok).toBe(true);
+    if (!raw.ok) return;
+    expect(raw.value.files.find((f) => f.path === "app.ts")?.content).toContain(fake);
+    expect(raw.value.stats.redacted).toBe(0);
+  });
+
   it("scopes diffs to a subdirectory pack root in a monorepo", () => {
     const dir = tmpDir();
     initGitRepo(dir);

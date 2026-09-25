@@ -86,6 +86,10 @@ export function createProgram(): Command {
       "--paths-from <file>",
       "pack only paths listed in a file (one per line; - reads stdin). Piped stdin without this flag is the same as -. Does not walk the tree",
     )
+    .option(
+      "--no-redact",
+      "disable best-effort secret redaction (keep raw values; useful to inspect a false positive locally)",
+    )
     .addHelpText(
       "after",
       `
@@ -105,6 +109,7 @@ Examples:
   $ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
   $ contextpack pack . --paths-from paths.txt --list
   $ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
+  $ contextpack pack . --no-redact              # Keep raw values (trusted local debug)
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
@@ -113,6 +118,7 @@ Notes:
   --diff requires --since. Tracked changes are packed as unified diffs; untracked files stay full content.
   A piped or redirected path list (non-TTY stdin) is treated as --paths-from - when the flag is omitted. Interactive terminals still walk the tree.
   --paths-from does not walk the tree. Paths are relative to [path]; absolute paths and .. escapes are skipped (stderr note unless --quiet). Combine with --since for the intersection. Explicit --paths-from <file> does not also read stdin.
+  Secret redaction is on by default and best-effort (PEM blocks, common token prefixes, assignment forms). It is not a security scanner. Use --no-redact to keep raw values (e.g. to debug a false positive).
 `,
     )
     .action((targetPath: string, opts) => {
@@ -181,6 +187,7 @@ interface PackCliOpts {
   since?: string;
   diff?: boolean;
   pathsFrom?: string;
+  redact?: boolean;
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -229,6 +236,7 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     since: opts.since,
     diff: opts.diff,
     paths: listedPaths,
+    redact: opts.redact !== false,
   };
 
   let result: PackResult;
@@ -315,6 +323,10 @@ function printSummary(result: PackResult, outPath: string | null): void {
     parts.push(`${result.stats.truncated} truncated`);
   }
 
+  if (result.stats.redacted > 0) {
+    parts.push(`${result.stats.redacted} redacted`);
+  }
+
   console.error(`contextpack: ${parts.join(" · ")}`);
 }
 
@@ -337,6 +349,10 @@ function printListSummary(result: PackResult, outPath: string | null): void {
   if (result.budget != null) {
     const pct = Math.round((result.totalTokens / result.budget) * 100);
     parts.push(`${pct}% of ${formatTokenCount(result.budget)} budget`);
+  }
+
+  if (result.stats.redacted > 0) {
+    parts.push(`${result.stats.redacted} redacted`);
   }
 
   console.error(`contextpack --list: ${parts.join(" · ")}`);
