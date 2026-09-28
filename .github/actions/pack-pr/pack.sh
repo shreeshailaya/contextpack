@@ -262,6 +262,46 @@ if [[ ! -f "$CLI_JS" ]]; then
   exit 0
 fi
 
+# CLI 0.1.11+ treats a non-TTY stdin as --paths-from -. GitHub Actions always
+# has a non-TTY empty stdin, which would pack nothing. Write the --since file
+# list and pass it explicitly so auto-stdin does not win.
+PATHS_FROM="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/contextpack-pr-paths.txt"
+mkdir -p "$(dirname "$PATHS_FROM")"
+PACK_ROOT="$(cd "$CONTEXTPACK_PATH" && pwd)"
+node -e '
+  const { spawnSync } = require("node:child_process");
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const packRoot = path.resolve(process.argv[1]);
+  const since = process.argv[2];
+  const outFile = process.argv[3];
+  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  const names = (args) => {
+    const r = spawnSync("git", args, { encoding: "utf8" });
+    return r.status === 0 ? r.stdout.split(/\r?\n/).filter(Boolean) : [];
+  };
+  const files = [
+    ...names(["diff", "--name-only", since, "--", packRoot]),
+    ...names(["ls-files", "--others", "--exclude-standard", "--", packRoot]),
+  ];
+  const seen = new Set();
+  const lines = [];
+  for (const file of files) {
+    const abs = path.resolve(gitRoot, file);
+    const rel = path.relative(packRoot, abs).split(path.sep).join("/");
+    if (!rel || rel === "." || rel.startsWith("../") || rel === "..") continue;
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    lines.push(rel);
+  }
+  fs.writeFileSync(outFile, lines.length ? `${lines.join("\n")}\n` : "");
+' "$PACK_ROOT" "$SINCE" "$PATHS_FROM" || {
+  echo "::warning::Could not list files changed since ${SINCE}; writing an empty --paths-from list."
+  : >"$PATHS_FROM"
+}
+
 DIFF_ARGS=()
 if [[ "$CONTEXTPACK_DIFF" == "true" ]]; then
   DIFF_ARGS+=(--diff)
@@ -281,6 +321,7 @@ echo "Packing ${CONTEXTPACK_PATH} since ${SINCE} (budget ${CONTEXTPACK_BUDGET}, 
 set +e
 node "$CLI_JS" pack "$CONTEXTPACK_PATH" \
   --since "$SINCE" \
+  --paths-from "$PATHS_FROM" \
   "${DIFF_ARGS[@]}" \
   --budget "$CONTEXTPACK_BUDGET" \
   --format json \
@@ -291,6 +332,7 @@ LIST_STATUS=$?
 
 node "$CLI_JS" pack "$CONTEXTPACK_PATH" \
   --since "$SINCE" \
+  --paths-from "$PATHS_FROM" \
   "${DIFF_ARGS[@]}" \
   --budget "$CONTEXTPACK_BUDGET" \
   --format "$CONTEXTPACK_FORMAT" \

@@ -222,6 +222,7 @@ describe("Action wiring", () => {
     expect(packSh).toContain("node \"$CLI_JS\" pack");
     expect(packSh).toContain("try_local_cli");
     expect(packSh).toContain("checkout_is_contextpack");
+    expect(packSh).toContain("--paths-from");
     expect(workflow).toContain("uses: ./.github/actions/pack-pr");
     expect(workflow).toContain(`version: "${pkg.version}"`);
     expect(workflow).toContain("pull_request");
@@ -346,6 +347,7 @@ exit 1
     expect(outputs).toContain("ok=true");
     expect(outputs).toMatch(/files=1/);
     expect(fs.existsSync(path.join(dir, "out.md"))).toBe(true);
+    expect(fs.existsSync(path.join(dir, "runner-temp", "contextpack-pr-paths.txt"))).toBe(true);
   });
 
   it("builds a local CLI when dist is missing on a contextpack checkout", () => {

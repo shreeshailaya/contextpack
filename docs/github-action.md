@@ -46,7 +46,9 @@ jobs:
 
 Copy-paste instead of referencing this repo: copy [`.github/actions/pack-pr/`](../.github/actions/pack-pr/) into your repository and use `uses: ./.github/actions/pack-pr`.
 
-Requires Node 18+ on the runner (the Action installs Node itself). In other repos it `npm install`s the pinned `@shree_vitkar/contextpack` version into a temp prefix and runs `node …/dist/index.js` — no global install and no PATH edits. On this repo it prefers `npm ci` + `npm run build` (or an existing `dist/`) in the checkout. `ubuntu-latest` is the intended runner.
+Requires Node 18+ on the runner (the Action installs Node itself). In other repos it `npm install`s the pinned `@shree_vitkar/contextpack` version into a temp prefix and runs `node …/dist/index.js` — no global install and no PATH edits. On this repo it prefers `npm ci` + `npm run build` (or an existing `dist/`) in the checkout.
+
+The Action also passes `--paths-from` with files changed since the base. GitHub Actions stdin is not a TTY, and contextpack 0.1.11+ treats a non-TTY stdin as `--paths-from -`; without an explicit list, an unused empty pipe would pack nothing. `ubuntu-latest` is the intended runner.
 
 ## Permissions
 
