@@ -1,6 +1,6 @@
 # GitHub Action: pack a PR with contextpack
 
-A composite Action that runs the published CLI on `pull_request`:
+A composite Action that runs contextpack on `pull_request`:
 
 ```bash
 npx -p @shree_vitkar/contextpack@<version> contextpack pack . --since <base.sha> --diff --budget <budget> --format md
@@ -8,7 +8,9 @@ npx -p @shree_vitkar/contextpack@<version> contextpack pack . --since <base.sha>
 
 It writes a budgeted digest, uploads it as a workflow artifact, and posts (or updates) a short PR comment. The comment is a summary plus a file list — the full digest stays in the artifact so the thread stays readable.
 
-This repo dogfoods it via [`.github/workflows/contextpack-pr.yml`](../.github/workflows/contextpack-pr.yml).
+This repo dogfoods it via [`.github/workflows/contextpack-pr.yml`](../.github/workflows/contextpack-pr.yml). That workflow pins `version` to `package.json`, which is often **not on npm yet** (publish happens after merge). The Action detects a checkout named `@shree_vitkar/contextpack` and **builds the local CLI** instead of installing from the registry, so a version-bump PR can still pack itself.
+
+Other repos still `npm install` the pinned version (retries on failure; if that version is missing, fall back to the latest published). npm stderr is included in the Action `error` output and the PR comment.
 
 Token counts are estimates (`characters / 4`), same as the CLI.
 
@@ -44,7 +46,7 @@ jobs:
 
 Copy-paste instead of referencing this repo: copy [`.github/actions/pack-pr/`](../.github/actions/pack-pr/) into your repository and use `uses: ./.github/actions/pack-pr`.
 
-Requires Node 18+ on the runner (the Action installs Node itself). It `npm install`s the pinned `@shree_vitkar/contextpack` version into a temp prefix and runs `node …/dist/index.js` — no global install and no PATH edits. `ubuntu-latest` is the intended runner.
+Requires Node 18+ on the runner (the Action installs Node itself). In other repos it `npm install`s the pinned `@shree_vitkar/contextpack` version into a temp prefix and runs `node …/dist/index.js` — no global install and no PATH edits. On this repo it prefers `npm ci` + `npm run build` (or an existing `dist/`) in the checkout. `ubuntu-latest` is the intended runner.
 
 ## Permissions
 
@@ -59,7 +61,7 @@ Artifact upload uses the default `GITHUB_TOKEN`. If you set `comment: false`, yo
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `version` | `0.1.13` | npm version of `@shree_vitkar/contextpack` installed into a temp prefix |
+| `version` | `0.1.13` | npm version of `@shree_vitkar/contextpack` to install. Unused when the checkout *is* this package (local CLI) |
 | `budget` | `12000` | Token budget (`chars/4`). `0` = unlimited |
 | `path` | `.` | Directory to pack |
 | `since` | PR base SHA | Git ref for `--since`. Falls back to `github.event.pull_request.base.sha`, then `origin/<base.ref>` |
@@ -109,7 +111,7 @@ Defaults are **fail-soft**: the job stays green so a digest problem does not blo
 | Valid empty pack (no changes, or all ignored) | success + comment | (same) | **job fails** (comment/artifact still happen first) |
 | Not a git checkout | warning + comment; no artifact | **job fails** | — |
 | Invalid or missing `--since` / base SHA | warning + comment; no artifact | **job fails** | — |
-| `git`, `node`, or `npm` missing; npm install fails | warning + comment; no artifact | **job fails** | — |
+| `git`, `node`, or `npm` missing; npm install fails (after retries / local CLI / latest-published fallback) | warning + comment (install stderr, not a git-history hint); no artifact | **job fails** | — |
 | Not a `pull_request` event and `since` unset | warning; no pack | **job fails** | — |
 | Comment API error (missing `pull-requests: write`) | **job fails** | — | — |
 
@@ -140,4 +142,6 @@ jobs:
 
 ## Pinning
 
-`version` pins the **npm** package. `uses: …@master` (or a commit SHA) pins the **Action** YAML. Bump `version` when you want a newer CLI; pin `uses` to a SHA when you want the Action steps frozen.
+`version` pins the **npm** package (other repos). `uses: …@master` (or a commit SHA) pins the **Action** YAML. Bump `version` when you want a newer CLI; pin `uses` to a SHA when you want the Action steps frozen.
+
+On this repository, dogfood ignores that pin and uses the PR's own CLI, so bumping `version` in the Action default before `npm publish` does not fail the digest with `ETARGET`.

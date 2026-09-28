@@ -4,7 +4,7 @@ author: Shreeshail Vitkar
 
 inputs:
   version:
-    description: npm version of @shree_vitkar/contextpack to install and run (e.g. 0.1.13).
+    description: npm version of @shree_vitkar/contextpack to install (e.g. 0.1.13). Ignored when the checkout is this package (local CLI is built instead).
     required: false
     default: "0.1.13"
   budget:

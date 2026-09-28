@@ -43,6 +43,38 @@ function includedEntries(list) {
   return list.entries.filter((e) => e.status === "included" || e.status === "partial");
 }
 
+/**
+ * Follow-up text for a failed pack. Git/--since failures keep the original
+ * "Typical causes" blurb; install/node failures get matching advice instead.
+ * @param {string} [error]
+ */
+export function errorGuidance(error) {
+  const lower = String(error || "").toLowerCase();
+
+  if (/npm install|notarget|etarget|no matching version|e404/.test(lower)) {
+    return "The pinned npm package is missing or failed to install. On this repo the Action builds the local CLI so a version bump can dogfood before publish. Elsewhere, pin a version that exists on npm.";
+  }
+  if (/dist\/index\.js missing/.test(lower)) {
+    return "The install succeeded but dist/index.js was missing. Check that the published package includes its build output.";
+  }
+  if (/node\/npm are not available/.test(lower)) {
+    return "Node.js and npm were not available on the runner. The Action runs actions/setup-node first; check that step.";
+  }
+  if (/git is not available/.test(lower)) {
+    return "git is required to resolve `--since`. Use a runner that has git installed.";
+  }
+  if (/not inside a git repository/.test(lower)) {
+    return "The workflow working directory is not a git checkout. Add actions/checkout before this Action.";
+  }
+  if (/no base ref/.test(lower)) {
+    return "Set the `since` input, or run on pull_request so the Action can use the PR base SHA.";
+  }
+  if (/invalid git ref|pack failed/.test(lower)) {
+    return "Typical causes: missing git history (fetch the PR base SHA), not a git checkout, or an invalid `--since` ref.";
+  }
+  return "See the job log for details.";
+}
+
 function artifactNote(name, filePath) {
   return `Full digest: \`${filePath}\` in the \`${name}\` workflow artifact.`;
 }
@@ -85,9 +117,7 @@ export function buildComment(opts) {
   if (!ok && error) {
     lines.push(`contextpack could not pack this PR: ${error}`);
     lines.push("");
-    lines.push(
-      "The job continued because `fail-on-error` is false. Typical causes: missing git history (fetch the PR base SHA), not a git checkout, or an invalid `--since` ref.",
-    );
+    lines.push(`The job continued because \`fail-on-error\` is false. ${errorGuidance(error)}`);
     lines.push("");
     lines.push(`Tried to pack changes since \`${sinceLabel}\` (${flags.join(", ")}).`);
     return `${lines.join("\n")}\n`;
