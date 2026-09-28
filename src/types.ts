@@ -46,12 +46,22 @@ export interface PackResult {
     skipped: number;
     /** Best-effort redactions applied to packed contents (0 if `--no-redact`). */
     redacted: number;
+    /**
+     * Candidate files whose path or packed content matched `--focus` terms.
+     * 0 when `--focus` is omitted or parsed to no terms.
+     */
+    focused: number;
   };
   /**
    * Stderr-worthy skip notes (missing / absolute / outside-root listed paths).
    * Empty when unused. Not part of the digest body.
    */
   notes: string[];
+  /**
+   * Parsed `--focus` terms used for ranking. Omitted or empty = no boost.
+   * Substring match, not semantic search.
+   */
+  focus?: string[];
 }
 
 /** Options for packing a directory. */
@@ -85,6 +95,12 @@ export interface PackOptions {
    * bodies and diffs. Default true. Not a security scanner.
    */
   redact?: boolean;
+  /**
+   * Keywords that boost ranking (path or packed content substring).
+   * Case-insensitive. Not a filter: non-matching files can still pack if
+   * budget remains. Empty / omitted = no boost. Not semantic search.
+   */
+  focus?: string[];
 }
 
 export interface CollectOptions {

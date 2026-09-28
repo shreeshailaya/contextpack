@@ -46,6 +46,7 @@ Use contextpack when an agent needs:
 - **Review preparation** — Getting a snapshot of what changed or what exists in a directory
 - **PR review context** — Use `--since main --diff` to pack patches of files changed in a PR branch
 - **Search-scoped packing** — Pipe `rg -l` into `contextpack pack` when you already know the relevant files (`--paths-from` is the explicit form)
+- **Topic-ranked packing** — Use `--focus auth,jwt` to boost files matching keywords without leaving the tool (substring match, ranking only)
 - **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
 
 ## Basic usage
@@ -119,6 +120,10 @@ contextpack pack . --budget 4000 --ignore 'tests/**' --ignore '**/*.test.ts'
 
 # Focus on a specific feature
 contextpack pack ./src/auth --budget 4000
+
+# Boost files matching keywords (still packs the rest of the tree if budget remains)
+contextpack pack . --focus auth,jwt --budget 4000
+contextpack pack . --focus "login session" --list
 ```
 
 ### Git-aware packing with --since
@@ -161,7 +166,7 @@ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
 contextpack pack . --paths-from paths.txt --list
 ```
 
-Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, `--quiet`, and `--no-redact` still apply.
+Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, `--quiet`, `--no-redact`, and `--focus` still apply.
 
 Combined with `--since`, contextpack packs the **intersection** (listed paths that also changed since the ref). An empty intersection is a successful empty pack, not an error. With a path list + `--since` + `--diff`, only intersecting tracked files become diffs; untracked intersecting paths stay full content.
 
@@ -188,14 +193,19 @@ When budget is constrained, contextpack prioritizes:
 
 This ensures agents see the most important context first.
 
+`--focus` is a ranking boost on top of those tiers: matching files (path or packed content / diff text, case-insensitive substring) sort ahead of non-matching files. Non-matching files are not dropped. This is not semantic search.
+
 ## Example: Agent workflow
 
 ```bash
 # 1. Agent receives task: "Refactor the auth module to use JWT"
 
-# 2. Agent finds relevant files, then packs only those (under budget)
-rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000 -o auth-context.md
+# 2. Agent packs with a topic boost (no ripgrep required), then reads the digest
+contextpack pack . --focus auth,jwt --budget 8000 -o auth-context.md
 
+#    Or find relevant files first, then pack only those:
+#    rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000 -o auth-context.md
+#
 #    Or pack a directory when the search set isn't known yet:
 #    contextpack pack ./src/auth --budget 8000 -o auth-context.md
 
@@ -249,6 +259,7 @@ Use `--no-redact` only when you need raw values (for example, to inspect a false
 
 - **Start with default budget** — 16k tokens is enough for most orientation tasks
 - **Pack incrementally** — Pack specific directories as you need them, not the whole repo upfront
+- **Use `--focus` for a topic** — Substring boost on path/content so auth-related files win under a tight budget without piping `rg` first
 - **Pipe a path list** — When `rg -l` or `git diff --name-only` already found the files, pipe them into `pack` (or use `--paths-from`) to avoid walking the tree
 - **Use JSON for parsing** — If your agent needs to iterate over files, use `--format json`
 - **Check truncated files** — The digest lists files that didn't fit; pack them separately if needed

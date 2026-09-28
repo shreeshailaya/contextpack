@@ -11,6 +11,7 @@ import {
   PR_REVIEW_RECIPE,
   PREFERRED_INVOKE,
   SEARCH_RECIPE,
+  FOCUS_RECIPE,
   SKILL_REL,
 } from "../src/init/templates.js";
 
@@ -80,10 +81,12 @@ function expectAccurateTemplates(text: string): void {
   expect(text).toContain(PREFERRED_INVOKE);
   expect(text).toContain(PR_REVIEW_RECIPE);
   expect(text).toContain(SEARCH_RECIPE);
+  expect(text).toContain(FOCUS_RECIPE);
   expect(text).toContain("--list");
   expect(text).toContain("--since");
   expect(text).toContain("--diff");
   expect(text).toContain("--paths-from -");
+  expect(text).toContain("--focus");
   expect(text).toContain("--format json");
   expect(text).toContain("-o");
   expect(text).toContain("--no-redact");

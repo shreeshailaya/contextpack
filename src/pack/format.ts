@@ -125,6 +125,7 @@ function formatJson(result: PackResult): string {
       budget: result.budget,
       totalTokens: result.totalTokens,
       tokenEstimateNote: "approximate: characters / 4",
+      ...(result.focus && result.focus.length > 0 ? { focus: result.focus } : {}),
       stats: result.stats,
       truncated: result.truncated,
       skipped: result.skipped,

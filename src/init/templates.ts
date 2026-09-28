@@ -11,12 +11,14 @@ export const PREFERRED_INVOKE =
 export const PR_REVIEW_RECIPE = "contextpack pack . --since main --diff --budget 12000";
 export const SEARCH_RECIPE =
   "rg -l '…' | contextpack pack . --paths-from - --budget 8000";
+export const FOCUS_RECIPE = "contextpack pack . --focus auth,jwt --budget 4000";
 
 const FLAG_LIST = `Key flags (do not invent others):
 - \`--list\` — preview which files would be included (dry-run)
 - \`--since <ref>\` — only files changed since a git ref
 - \`--diff\` — pack unified diffs of those changes (requires \`--since\`)
 - \`--paths-from -\` — pack only paths from stdin (no tree walk)
+- \`--focus <terms>\` — boost ranking for files matching keywords (substring on path or content; not a filter, not semantic search)
 - \`--format json\` — structured output for tooling
 - \`-o <file>\` — write the digest to a file
 - \`--no-redact\` — disable best-effort secret redaction (default on; not a scanner)
@@ -39,6 +41,12 @@ Search-scoped (files you already found):
 
 \`\`\`bash
 ${SEARCH_RECIPE}
+\`\`\`
+
+Topic boost (still packs the tree; matching files rank first):
+
+\`\`\`bash
+${FOCUS_RECIPE}
 \`\`\``;
 
 export const CURSOR_RULE = `---
@@ -94,8 +102,9 @@ ${PREFERRED_INVOKE}
 
 - PR review: \`${PR_REVIEW_RECIPE}\`
 - Search-scoped: \`${SEARCH_RECIPE}\`
+- Topic boost: \`${FOCUS_RECIPE}\`
 
-Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--format json\`, \`-o\`, \`--no-redact\`. Token counts are estimates (chars/4). Secret redaction is best-effort, not a scanner.
+Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--focus\`, \`--format json\`, \`-o\`, \`--no-redact\`. Token counts are estimates (chars/4). Secret redaction is best-effort, not a scanner.
 ${AGENTS_SECTION_END}
 `;
 

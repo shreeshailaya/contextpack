@@ -1,6 +1,7 @@
 import path from "node:path";
 import { collectFiles, readTextFile, type CollectedFile } from "./collect.js";
 import { selectUnderBudget } from "./budget.js";
+import { parseFocusTerms } from "./focus.js";
 import { getUnifiedDiffs } from "./git.js";
 import { redactSecrets } from "./redact.js";
 import type { PackOptions, PackResult } from "../types.js";
@@ -66,7 +67,8 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
   const redacted = redact ? applyRedaction(collected) : 0;
 
   const budget = options.budget ?? null;
-  const selection = selectUnderBudget(collected, budget);
+  const focus = parseFocusTerms(options.focus);
+  const selection = selectUnderBudget(collected, budget, focus);
 
   const result: PackResult = {
     root: absRoot,
@@ -76,6 +78,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
     truncated: selection.truncated,
     skipped: selection.skipped,
     notes,
+    ...(focus.length > 0 ? { focus } : {}),
     stats: {
       discovered: collected.length,
       included: selection.files.length,
@@ -83,6 +86,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
       truncated: selection.truncated.length,
       skipped: selection.skipped.length,
       redacted,
+      focused: focus.length > 0 ? selection.focused : 0,
     },
   };
 
