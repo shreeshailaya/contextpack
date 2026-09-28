@@ -6,6 +6,7 @@ import { pack } from "./pack/pack.js";
 import { formatPack, formatList } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
 import { parsePathList, readPathsFromSource, resolvePathsFromOption } from "./pack/pathsFrom.js";
+import { parseFocusTerms } from "./pack/focus.js";
 import { formatInitSummary, InitError, runInit } from "./init/init.js";
 import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
@@ -90,6 +91,12 @@ export function createProgram(): Command {
       "--no-redact",
       "disable best-effort secret redaction (keep raw values; useful to inspect a false positive locally)",
     )
+    .option(
+      "--focus <terms>",
+      "boost ranking for files matching keywords (comma/space-separated substring on path or content; not a filter, not semantic search). Repeatable",
+      collect,
+      [] as string[],
+    )
     .addHelpText(
       "after",
       `
@@ -110,6 +117,8 @@ Examples:
   $ contextpack pack . --paths-from paths.txt --list
   $ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --paths-from - --budget 8000
   $ contextpack pack . --no-redact              # Keep raw values (trusted local debug)
+  $ contextpack pack . --focus auth,jwt --budget 4000
+  $ contextpack pack . --focus "login session" --list
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
@@ -119,7 +128,7 @@ Notes:
   A piped or redirected path list (non-TTY stdin) is treated as --paths-from - when the flag is omitted. Interactive terminals still walk the tree.
   --paths-from does not walk the tree. Paths are relative to [path]; absolute paths and .. escapes are skipped (stderr note unless --quiet). Combine with --since for the intersection. Explicit --paths-from <file> does not also read stdin.
   Secret redaction is on by default and best-effort (PEM blocks, common token prefixes, assignment forms). It is not a security scanner. Use --no-redact to keep raw values (e.g. to debug a false positive).
-`,
+  --focus is a case-insensitive substring match on relative path and packed content (or diff text with --diff). It boosts ranking only — non-matching files can still pack if budget remains. Empty terms are a no-op. Not semantic search.`,
     )
     .action((targetPath: string, opts) => {
       runPack(targetPath, opts);
@@ -188,6 +197,7 @@ interface PackCliOpts {
   diff?: boolean;
   pathsFrom?: string;
   redact?: boolean;
+  focus?: string[];
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -237,6 +247,7 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     diff: opts.diff,
     paths: listedPaths,
     redact: opts.redact !== false,
+    focus: parseFocusTerms(opts.focus),
   };
 
   let result: PackResult;
@@ -327,6 +338,10 @@ function printSummary(result: PackResult, outPath: string | null): void {
     parts.push(`${result.stats.redacted} redacted`);
   }
 
+  if (result.focus && result.focus.length > 0) {
+    parts.push(`focus: ${result.focus.join(",")} (${result.stats.focused} matched)`);
+  }
+
   console.error(`contextpack: ${parts.join(" · ")}`);
 }
 
@@ -353,6 +368,10 @@ function printListSummary(result: PackResult, outPath: string | null): void {
 
   if (result.stats.redacted > 0) {
     parts.push(`${result.stats.redacted} redacted`);
+  }
+
+  if (result.focus && result.focus.length > 0) {
+    parts.push(`focus: ${result.focus.join(",")} (${result.stats.focused} matched)`);
   }
 
   console.error(`contextpack --list: ${parts.join(" · ")}`);

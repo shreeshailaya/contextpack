@@ -82,6 +82,12 @@ contextpack pack . --since HEAD~1 --list
 # Pack unified diffs of changes since main (cheaper than full files)
 contextpack pack . --since main --diff
 
+# Boost files matching a topic (substring on path or content; ranking only)
+contextpack pack . --focus auth,jwt --budget 4000
+
+# Preview a topic-ranked pack
+contextpack pack . --focus "login session" --list
+
 # Pack only files matching a search (agent workflow)
 rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
 
@@ -101,7 +107,7 @@ contextpack pack . --no-redact
 2. Filters out noise: `node_modules`, lockfiles, binaries, build artifacts, secrets
 3. Optionally filters to only git-changed files with `--since`. Combined with a piped list or `--paths-from`, packs the intersection
 4. With `--diff`, packs unified diffs of those changes instead of full file bodies (untracked files stay full content)
-5. Ranks files by signal (README and manifests first, tests last)
+5. Ranks files by signal (README and manifests first, tests last). `--focus` boosts files whose path or packed content contains those keywords (substring, not semantic search) — ranking only, not a filter
 6. Fits within your token budget, keeping the highest-value files
 7. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
 8. Redacts obvious secret-looking substrings in file bodies and diffs (best-effort; `--no-redact` to disable)
@@ -129,6 +135,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `--diff` | With `--since`, pack unified diffs of tracked changes instead of full files |
 | `--paths-from <file>` | Pack only paths listed in a file (one per line; `-` reads stdin). Piped stdin without this flag is the same as `-`. No tree walk |
 | `--no-redact` | Disable best-effort secret redaction (keep raw values; useful to inspect a false positive locally) |
+| `--focus <terms>` | Boost ranking for files matching keywords (comma/space-separated substring on path or content; repeatable). Ranking only — not a filter, not semantic search |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
@@ -140,7 +147,8 @@ contextpack is designed for both humans and AI agents. Before a large refactor o
 # Get a digest of the codebase structure
 contextpack pack . --budget 8000 -o context.md
 
-# Then include context.md in your prompt
+# Boost files matching a topic (substring on path or content; ranking only)
+contextpack pack . --focus auth,jwt --budget 4000 -o context.md
 ```
 
 ### Agent setup
@@ -237,6 +245,7 @@ src/
     pack.ts           # Orchestrator
     pathsFrom.ts      # --paths-from parse + path safety
     redact.ts         # Best-effort secret redaction
+    focus.ts          # --focus term parse + substring match
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest
 scripts/
@@ -257,7 +266,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.12** — Best-effort secret redaction in packed file bodies and diffs (default on; `--no-redact` to disable). Not a security scanner; path ignores for `.env` / `*.pem` are unchanged. Digest stats and stderr report `redacted: N`. Piped path lists, `contextpack init`, `--list`, `--diff` unchanged. Token counts remain characters/4 estimates.
+**v0.1.13** — `--focus <terms>` boosts ranking for files matching keywords (case-insensitive substring on path or packed content / diff text). Ranking only, not a filter, not semantic search. Repeatable; comma- or space-separated. Empty terms are a no-op. Secret redaction, piped path lists, `contextpack init`, `--list`, `--diff` unchanged. Token counts remain characters/4 estimates.
 
 ## License
 

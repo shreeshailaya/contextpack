@@ -1,4 +1,5 @@
 import { estimateTokens } from "./tokens.js";
+import { matchesFocus, parseFocusTerms } from "./focus.js";
 import type { PackedFile } from "../types.js";
 import type { CollectedFile } from "./collect.js";
 import { readTextFile } from "./collect.js";
@@ -14,6 +15,8 @@ export interface BudgetSelection {
   truncated: string[];
   skipped: string[];
   totalTokens: number;
+  /** Candidate files whose path or packed content matched `--focus` terms. */
+  focused: number;
 }
 
 /**
@@ -44,13 +47,17 @@ function priorityScore(relPath: string): number {
 
 /**
  * Select files under an optional token budget.
- * When budgeting, files are sorted by priority then size (smaller first within tier).
+ * When budgeting, files are sorted by focus match (if any), then priority, then size
+ * (smaller first within tier). `--focus` boosts ranking; it does not filter.
  */
 export function selectUnderBudget(
   collected: CollectedFile[],
   budget: number | null | undefined,
+  focus?: string[],
 ): BudgetSelection {
-  const prepared: { meta: CollectedFile; content: string; tokens: number }[] = [];
+  const terms = parseFocusTerms(focus);
+  const prepared: { meta: CollectedFile; content: string; tokens: number; focused: boolean }[] =
+    [];
   const skipped: string[] = [];
 
   for (const meta of collected) {
@@ -60,8 +67,15 @@ export function selectUnderBudget(
       continue;
     }
     const tokens = estimateTokens(content);
-    prepared.push({ meta, content, tokens });
+    prepared.push({
+      meta,
+      content,
+      tokens,
+      focused: matchesFocus(meta.relPath, content, terms),
+    });
   }
+
+  const focused = prepared.reduce((n, item) => n + (item.focused ? 1 : 0), 0);
 
   // Stable order for no-budget path: alphabetical (already sorted by collect)
   if (budget == null || budget <= 0) {
@@ -77,10 +91,12 @@ export function selectUnderBudget(
       truncated: [],
       skipped,
       totalTokens: files.reduce((s, f) => s + f.tokens, 0),
+      focused,
     };
   }
 
   prepared.sort((a, b) => {
+    if (a.focused !== b.focused) return a.focused ? -1 : 1;
     const pa = priorityScore(a.meta.relPath);
     const pb = priorityScore(b.meta.relPath);
     if (pa !== pb) return pa - pb;
@@ -134,7 +150,7 @@ export function selectUnderBudget(
   // Present included files in path order for readable digests
   files.sort((a, b) => a.path.localeCompare(b.path));
 
-  return { files, truncated, skipped, totalTokens };
+  return { files, truncated, skipped, totalTokens, focused };
 }
 
 /**

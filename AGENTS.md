@@ -35,6 +35,9 @@ contextpack pack ./src --budget 12000
 # JSON format for programmatic access
 contextpack pack . --format json --budget 8000
 
+# Boost files matching a topic (substring on path/content; still packs the rest if budget remains)
+contextpack pack . --focus auth,jwt --budget 4000
+
 # Pack only files an agent already found (e.g. ripgrep)
 rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
 ```
@@ -60,6 +63,7 @@ src/
     format.ts         # Output formatters (md/json/plain)
     pathsFrom.ts      # --paths-from parse + path safety
     redact.ts         # Best-effort secret redaction (not a scanner)
+    focus.ts          # --focus term parse + substring match
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest tests
 docs/                 # Documentation
