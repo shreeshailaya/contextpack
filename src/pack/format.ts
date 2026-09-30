@@ -1,5 +1,13 @@
-import type { OutputFormat, PackResult, ListFormat, PackedFile, PackedFileKind } from "../types.js";
+import type {
+  OutputFormat,
+  PackResult,
+  ListFormat,
+  PackedFile,
+  DigestMapEntry,
+  DigestMapStatus,
+} from "../types.js";
 import { formatTokenCount } from "./tokens.js";
+import { formatDigestMapMarkdown, formatDigestMapPlain } from "./map.js";
 
 export function formatPack(result: PackResult, format: OutputFormat): string {
   switch (format) {
@@ -47,12 +55,26 @@ function formatMarkdown(result: PackResult): string {
   if (result.stats.redacted > 0) {
     lines.push(`| Redacted (best-effort) | ${result.stats.redacted} |`);
   }
+  if (result.stats.mapTokens > 0) {
+    lines.push(
+      `| Map | ${result.map.length} paths, ~${formatTokenCount(result.stats.mapTokens)} tok reserved |`,
+    );
+  }
   lines.push("");
   lines.push(`> Token counts are **estimates** (\`characters / 4\`), not model-specific tokenizer output.`);
   if (result.stats.redacted > 0) {
     lines.push(`> Secret redaction is **best-effort**, not a security scan. Use \`--no-redact\` to keep raw values.`);
   }
+  if (result.stats.mapTokens > 0) {
+    lines.push(
+      `> The map is reserved from the budget (chars÷4 of this compact inventory) so it does not silently overflow. \`totalTokens\` is file bodies only. \`--no-map\` skips the map.`,
+    );
+  }
   lines.push("");
+  if (result.stats.mapTokens > 0) {
+    lines.push(formatDigestMapMarkdown(result.map).trimEnd());
+    lines.push("");
+  }
   lines.push(`## Files`);
   lines.push("");
   for (const f of result.files) {
@@ -98,7 +120,16 @@ function formatPlain(result: PackResult): string {
     `files: ${result.stats.included}  tokens(~): ${result.totalTokens}  budget: ${result.budget ?? "none"}`,
   );
   lines.push(`estimate: characters/4`);
+  if (result.stats.mapTokens > 0) {
+    lines.push(
+      `map: ${result.map.length} paths, ~${result.stats.mapTokens} tok reserved (chars/4)`,
+    );
+  }
   lines.push("");
+  if (result.stats.mapTokens > 0) {
+    lines.push(formatDigestMapPlain(result.map).trimEnd());
+    lines.push("");
+  }
 
   for (const f of result.files) {
     const marker = fileMarker(f);
@@ -127,6 +158,7 @@ function formatJson(result: PackResult): string {
       tokenEstimateNote: "approximate: characters / 4",
       ...(result.focus && result.focus.length > 0 ? { focus: result.focus } : {}),
       stats: result.stats,
+      ...(result.stats.mapTokens > 0 ? { map: result.map, mapTokens: result.stats.mapTokens } : {}),
       truncated: result.truncated,
       skipped: result.skipped,
       files: result.files.map((f) => ({
@@ -192,15 +224,10 @@ function fenceLang(filePath: string): string {
   return map[ext.toLowerCase()] ?? "";
 }
 
-/** Status for each file in list preview. */
-export type ListFileStatus = "included" | "partial" | "truncated" | "skipped";
+/** Status for each file in list preview (same as the digest map). */
+export type ListFileStatus = DigestMapStatus;
 
-export interface ListEntry {
-  path: string;
-  tokens: number;
-  status: ListFileStatus;
-  kind: PackedFileKind;
-}
+export type ListEntry = DigestMapEntry;
 
 export interface ListPreview {
   root: string;
@@ -215,57 +242,28 @@ export interface ListPreview {
     discovered: number;
     ignored: number;
     redacted: number;
+    mapTokens: number;
   };
 }
 
 function buildListPreview(result: PackResult): ListPreview {
-  const entries: ListEntry[] = [];
-  const partialPaths = new Set<string>();
-
-  for (const f of result.files) {
-    if (f.partial) {
-      partialPaths.add(f.path);
-      entries.push({
-        path: f.path,
-        tokens: f.tokens,
-        status: "partial",
-        kind: f.kind ?? "file",
-      });
-    } else {
-      entries.push({
-        path: f.path,
-        tokens: f.tokens,
-        status: "included",
-        kind: f.kind ?? "file",
-      });
-    }
-  }
-
-  for (const p of result.truncated) {
-    if (!partialPaths.has(p)) {
-      entries.push({ path: p, tokens: 0, status: "truncated", kind: "file" });
-    }
-  }
-
-  for (const p of result.skipped) {
-    entries.push({ path: p, tokens: 0, status: "skipped", kind: "file" });
-  }
-
-  const partialCount = result.files.filter((f) => f.partial).length;
+  // Same inventory as the digest map (path-sorted). Do not dump bodies.
+  const entries: ListEntry[] = result.map.map((e) => ({ ...e }));
 
   return {
     root: result.root,
     budget: result.budget,
     entries,
     summary: {
-      included: result.stats.included - partialCount,
-      partial: partialCount,
-      truncated: result.stats.truncated,
-      skipped: result.stats.skipped,
+      included: entries.filter((e) => e.status === "included").length,
+      partial: entries.filter((e) => e.status === "partial").length,
+      truncated: entries.filter((e) => e.status === "truncated").length,
+      skipped: entries.filter((e) => e.status === "skipped").length,
       totalTokens: result.totalTokens,
       discovered: result.stats.discovered,
       ignored: result.stats.ignored,
       redacted: result.stats.redacted,
+      mapTokens: result.stats.mapTokens,
     },
   };
 }
@@ -290,6 +288,12 @@ function formatListPlain(preview: ListPreview): string {
   lines.push(
     `discovered: ${preview.summary.discovered} · ignored: ${preview.summary.ignored}`
   );
+  if (preview.summary.mapTokens > 0) {
+    lines.push(
+      `map reserved: ~${formatTokenCount(preview.summary.mapTokens)} tokens (chars/4; same inventory as digest Map)`
+    );
+  }
+  lines.push(`statuses match the digest map; this preview has no file bodies`);
   lines.push("");
 
   const maxPathLen = Math.max(...preview.entries.map((e) => e.path.length), 10);

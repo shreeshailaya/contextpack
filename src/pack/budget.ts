@@ -1,8 +1,9 @@
 import { estimateTokens } from "./tokens.js";
 import { matchesFocus, parseFocusTerms } from "./focus.js";
-import type { PackedFile } from "../types.js";
+import type { PackedFile, PackedFileKind } from "../types.js";
 import type { CollectedFile } from "./collect.js";
 import { readTextFile } from "./collect.js";
+import { estimateMapReserve } from "./map.js";
 
 /**
  * Minimum remaining budget (in tokens) required to attempt partial file inclusion.
@@ -17,6 +18,9 @@ export interface BudgetSelection {
   totalTokens: number;
   /** Candidate files whose path or packed content matched `--focus` terms. */
   focused: number;
+  /** Full-file chars/4 estimates for readable candidates. */
+  candidateTokens: Map<string, number>;
+  candidateKinds: Map<string, PackedFileKind>;
 }
 
 /**
@@ -54,6 +58,7 @@ export function selectUnderBudget(
   collected: CollectedFile[],
   budget: number | null | undefined,
   focus?: string[],
+  options?: { reserveMap?: boolean },
 ): BudgetSelection {
   const terms = parseFocusTerms(focus);
   const prepared: { meta: CollectedFile; content: string; tokens: number; focused: boolean }[] =
@@ -77,8 +82,20 @@ export function selectUnderBudget(
 
   const focused = prepared.reduce((n, item) => n + (item.focused ? 1 : 0), 0);
 
+  const candidateTokens = new Map<string, number>();
+  const candidateKinds = new Map<string, PackedFileKind>();
+  for (const item of prepared) {
+    candidateTokens.set(item.meta.relPath, item.tokens);
+    candidateKinds.set(item.meta.relPath, item.meta.kind ?? "file");
+  }
+  for (const p of skipped) {
+    candidateKinds.set(p, "file");
+  }
+
+  const unlimited = budget == null || budget <= 0;
+
   // Stable order for no-budget path: alphabetical (already sorted by collect)
-  if (budget == null || budget <= 0) {
+  if (unlimited) {
     const files: PackedFile[] = prepared.map(({ meta, content, tokens }) => ({
       path: meta.relPath,
       content,
@@ -92,7 +109,22 @@ export function selectUnderBudget(
       skipped,
       totalTokens: files.reduce((s, f) => s + f.tokens, 0),
       focused,
+      candidateTokens,
+      candidateKinds,
     };
+  }
+
+  let effectiveBudget = budget;
+  if (options?.reserveMap) {
+    const reserve = estimateMapReserve([
+      ...prepared.map((item) => ({
+        path: item.meta.relPath,
+        tokens: item.tokens,
+        kind: item.meta.kind ?? "file",
+      })),
+      ...skipped.map((path) => ({ path, tokens: 0, kind: "file" as const })),
+    ]);
+    effectiveBudget = Math.max(0, effectiveBudget - reserve);
   }
 
   prepared.sort((a, b) => {
@@ -115,7 +147,7 @@ export function selectUnderBudget(
       continue;
     }
 
-    if (totalTokens + item.tokens <= budget) {
+    if (totalTokens + item.tokens <= effectiveBudget) {
       files.push({
         path: item.meta.relPath,
         content: item.content,
@@ -125,7 +157,7 @@ export function selectUnderBudget(
       });
       totalTokens += item.tokens;
     } else {
-      const remainingTokens = budget - totalTokens;
+      const remainingTokens = effectiveBudget - totalTokens;
 
       if (remainingTokens >= PARTIAL_INCLUSION_MIN_TOKENS) {
         const partialContent = sliceToTokenBudget(item.content, remainingTokens);
@@ -150,7 +182,7 @@ export function selectUnderBudget(
   // Present included files in path order for readable digests
   files.sort((a, b) => a.path.localeCompare(b.path));
 
-  return { files, truncated, skipped, totalTokens, focused };
+  return { files, truncated, skipped, totalTokens, focused, candidateTokens, candidateKinds };
 }
 
 /**

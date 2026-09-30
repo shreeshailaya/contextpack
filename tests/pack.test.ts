@@ -34,6 +34,7 @@ describe("pack + format", () => {
     const result = pack(root, { budget: 50_000 });
     const md = formatPack(result, "md");
     expect(md).toContain("# contextpack digest");
+    expect(md).toContain("## Map");
     expect(md).toContain("## README.md");
     expect(md).toContain("## src/main.ts");
     expect(md).toContain("characters / 4");
@@ -48,9 +49,12 @@ describe("pack + format", () => {
     const raw = formatPack(result, "json");
     const parsed = JSON.parse(raw) as {
       files: { path: string; content: string }[];
+      map: { path: string; status: string }[];
       tokenEstimateNote: string;
     };
     expect(parsed.files[0]?.path).toBe("hi.ts");
+    expect(parsed.map[0]?.path).toBe("hi.ts");
+    expect(parsed.map[0]?.status).toBe("included");
     expect(parsed.tokenEstimateNote).toMatch(/characters \/ 4/);
   });
 

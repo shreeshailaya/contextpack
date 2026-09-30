@@ -49,6 +49,20 @@ Root: `fixtures/demo-project`
 | Files included | 5 |
 | Approx. tokens | ~200 (chars÷4 estimate) |
 | Budget | 2000 |
+| Map | 5 paths, ~40 tok reserved |
+
+> Token counts are **estimates** (`characters / 4`).
+> The map is reserved from the budget (chars÷4) so it does not silently overflow.
+
+## Map
+
+Discovered candidates. Status matches `--list`. Token counts are chars÷4 estimates.
+
+- `README.md` included (~40)
+- `package.json` included (~35)
+- `src/index.js` included (~20)
+- `src/utils.js` included (~25)
+- `tests/utils.test.js` included (~50)
 
 ## Files
 

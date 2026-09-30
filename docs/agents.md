@@ -56,6 +56,7 @@ Use contextpack when an agent needs:
 contextpack pack . --budget 8000 -o context.md
 
 # The digest includes:
+# - Map of discovered candidates (included vs truncated/skipped)
 # - File list with token counts
 # - Prioritized file contents (README, manifests, src/ first)
 # - Summary stats
@@ -73,7 +74,7 @@ contextpack pack . --list --budget 8000
 contextpack pack . --list --format json --budget 8000
 ```
 
-This is useful for agents to plan context before committing to a pack, or to tune budget honestly.
+This is useful for agents to plan context before committing to a pack, or to tune budget honestly. Statuses and token estimates match the digest **Map** (same inventory, no file bodies). Map tokens are reserved from the budget unless you pass `--no-map`.
 
 ## Integration patterns
 
@@ -102,10 +103,17 @@ The JSON output includes:
   "files": [
     { "path": "src/main.ts", "tokens": 150, "content": "..." }
   ],
-  "stats": { "included": 10, "truncated": 5 },
-  "totalTokens": 8000
+  "map": [
+    { "path": "src/main.ts", "status": "included", "tokens": 150, "kind": "file" },
+    { "path": "tests/big.test.ts", "status": "truncated", "tokens": 2400, "kind": "file" }
+  ],
+  "mapTokens": 80,
+  "stats": { "included": 10, "truncated": 5, "mapTokens": 80 },
+  "totalTokens": 7920
 }
 ```
+
+`map` is the same inventory as `--list`. `mapTokens` is a chars/4 estimate of that compact text and is reserved from the budget before bodies are selected. `totalTokens` is still file bodies only. `--no-map` omits `map` / `mapTokens` and uses the full budget for bodies.
 
 ### Scoped packing
 
@@ -166,7 +174,7 @@ contextpack pack . --paths-from changed.txt --budget 4000 -o context.md
 contextpack pack . --paths-from paths.txt --list
 ```
 
-Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, `--quiet`, `--no-redact`, and `--focus` still apply.
+Format: one path per line, UTF-8, relative to the pack root. Empty lines and `#` comments are skipped. Missing paths, absolute paths, and `..` traversal outside the root are skipped (stderr note unless `--quiet`). Default ignores, root ignore files, `--ignore`, `--include`, `--budget`, `--format`, `--list`, `-o`, `--quiet`, `--no-redact`, `--focus`, and `--no-map` still apply.
 
 Combined with `--since`, contextpack packs the **intersection** (listed paths that also changed since the ref). An empty intersection is a successful empty pack, not an error. With a path list + `--since` + `--diff`, only intersecting tracked files become diffs; untracked intersecting paths stay full content.
 
@@ -262,6 +270,7 @@ Use `--no-redact` only when you need raw values (for example, to inspect a false
 - **Use `--focus` for a topic** — Substring boost on path/content so auth-related files win under a tight budget without piping `rg` first
 - **Pipe a path list** — When `rg -l` or `git diff --name-only` already found the files, pipe them into `pack` (or use `--paths-from`) to avoid walking the tree
 - **Use JSON for parsing** — If your agent needs to iterate over files, use `--format json`
+- **Read the Map first** — Under a tight budget, the Map shows what was included vs left out without dumping bodies. `--list` is the same inventory
 - **Check truncated files** — The digest lists files that didn't fit; pack them separately if needed
 - **Reuse existing agent ignores** — Drop a `.cursorignore` (or `.aiignore` / `.copilotignore`) at the pack root; no extra flags needed
 - **Treat redaction as a seatbelt** — default-on, best-effort, not a scan. Use `--no-redact` only in a trusted local context

@@ -61,6 +61,7 @@ src/
     tokens.ts         # Token estimation (chars/4)
     naive.ts          # Naive dump (benchmark baseline)
     format.ts         # Output formatters (md/json/plain)
+    map.ts            # Digest map (inventory + budget reserve)
     pathsFrom.ts      # --paths-from parse + path safety
     redact.ts         # Best-effort secret redaction (not a scanner)
     focus.ts          # --focus term parse + substring match
