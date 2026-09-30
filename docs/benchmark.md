@@ -72,6 +72,8 @@ Packed files (all three budgets): `README.md`, `package.json`, `src/index.js`, `
 
 The packed tree is ~161 estimated tokens, so a 500-token budget already keeps everything contextpack would keep. **The 90% reduction vs naive dump is ignore-filtering, not truncation.** That is the honest reading.
 
+Packed `~Tokens` are file bodies only (chars/4). Since 0.1.14 the digest also reserves a compact Map from the budget; that reserve is not in this column. `--no-map` uses the full budget for bodies.
+
 ### `src/` (secondary snapshot — will drift)
 
 Same run. Unlimited pack matches naive dump because `src/` is already a clean tree (no vendor/lockfile/build). Tight budgets then truncate. Do not treat these as a product claim; they change when files in `src/` change.

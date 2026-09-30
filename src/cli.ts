@@ -97,6 +97,10 @@ export function createProgram(): Command {
       collect,
       [] as string[],
     )
+    .option(
+      "--no-map",
+      "omit the digest map and do not reserve map tokens from the budget (--list still previews files)",
+    )
     .addHelpText(
       "after",
       `
@@ -119,6 +123,7 @@ Examples:
   $ contextpack pack . --no-redact              # Keep raw values (trusted local debug)
   $ contextpack pack . --focus auth,jwt --budget 4000
   $ contextpack pack . --focus "login session" --list
+  $ contextpack pack . --no-map --budget 4000        # Bodies only; no map reserve
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
@@ -128,7 +133,8 @@ Notes:
   A piped or redirected path list (non-TTY stdin) is treated as --paths-from - when the flag is omitted. Interactive terminals still walk the tree.
   --paths-from does not walk the tree. Paths are relative to [path]; absolute paths and .. escapes are skipped (stderr note unless --quiet). Combine with --since for the intersection. Explicit --paths-from <file> does not also read stdin.
   Secret redaction is on by default and best-effort (PEM blocks, common token prefixes, assignment forms). It is not a security scanner. Use --no-redact to keep raw values (e.g. to debug a false positive).
-  --focus is a case-insensitive substring match on relative path and packed content (or diff text with --diff). It boosts ranking only — non-matching files can still pack if budget remains. Empty terms are a no-op. Not semantic search.`,
+  --focus is a case-insensitive substring match on relative path and packed content (or diff text with --diff). It boosts ranking only — non-matching files can still pack if budget remains. Empty terms are a no-op. Not semantic search.
+  Digests include a Map of discovered candidates (included / partial / truncated / skipped). Map tokens are reserved from the budget (chars/4 of the compact inventory) so the map does not silently overflow. totalTokens is still file bodies only. --list is that same inventory without bodies. --no-map skips the map and uses the full budget for bodies.`,
     )
     .action((targetPath: string, opts) => {
       runPack(targetPath, opts);
@@ -198,6 +204,7 @@ interface PackCliOpts {
   pathsFrom?: string;
   redact?: boolean;
   focus?: string[];
+  map?: boolean;
 }
 
 function runPack(targetPath: string, opts: PackCliOpts): void {
@@ -248,6 +255,7 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     paths: listedPaths,
     redact: opts.redact !== false,
     focus: parseFocusTerms(opts.focus),
+    map: opts.map !== false,
   };
 
   let result: PackResult;
@@ -325,8 +333,13 @@ function printSummary(result: PackResult, outPath: string | null): void {
 
   parts.push(`~${formatTokenCount(result.totalTokens)} tokens`);
 
+  if (result.stats.mapTokens > 0) {
+    parts.push(`map ~${formatTokenCount(result.stats.mapTokens)}`);
+  }
+
   if (result.budget != null) {
-    const pct = Math.round((result.totalTokens / result.budget) * 100);
+    const used = result.totalTokens + result.stats.mapTokens;
+    const pct = Math.round((used / result.budget) * 100);
     parts.push(`${pct}% of ${formatTokenCount(result.budget)} budget`);
   }
 
@@ -361,8 +374,13 @@ function printListSummary(result: PackResult, outPath: string | null): void {
 
   parts.push(`~${formatTokenCount(result.totalTokens)} tokens`);
 
+  if (result.stats.mapTokens > 0) {
+    parts.push(`map ~${formatTokenCount(result.stats.mapTokens)}`);
+  }
+
   if (result.budget != null) {
-    const pct = Math.round((result.totalTokens / result.budget) * 100);
+    const used = result.totalTokens + result.stats.mapTokens;
+    const pct = Math.round((used / result.budget) * 100);
     parts.push(`${pct}% of ${formatTokenCount(result.budget)} budget`);
   }
 

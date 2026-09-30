@@ -7,6 +7,22 @@ export type ListFormat = "plain" | "json";
 /** Whether packed content is a full file body or a unified git diff. */
 export type PackedFileKind = "file" | "diff";
 
+/** Status of one discovered candidate in the digest map / `--list` preview. */
+export type DigestMapStatus = "included" | "partial" | "truncated" | "skipped";
+
+/** One row in the compact digest map (same statuses as `--list`). */
+export interface DigestMapEntry {
+  /** Path relative to the pack root. */
+  path: string;
+  status: DigestMapStatus;
+  /**
+   * chars÷4 estimate: packed tokens for included/partial,
+   * full-file tokens for truncated, 0 for skipped.
+   */
+  tokens: number;
+  kind: PackedFileKind;
+}
+
 /** A single file selected for inclusion in a pack. */
 export interface PackedFile {
   /** Path relative to the pack root. */
@@ -37,6 +53,12 @@ export interface PackResult {
   truncated: string[];
   /** Files skipped as binary / unreadable. */
   skipped: string[];
+  /**
+   * Compact inventory of discovered candidates (included vs left out).
+   * Always populated so `--list` matches the digest map. Not rendered
+   * when `stats.mapTokens` is 0 (`--no-map`).
+   */
+  map: DigestMapEntry[];
   /** Summary stats. */
   stats: {
     discovered: number;
@@ -51,6 +73,11 @@ export interface PackResult {
      * 0 when `--focus` is omitted or parsed to no terms.
      */
     focused: number;
+    /**
+     * chars÷4 estimate of the compact map text reserved from the budget.
+     * 0 when the map is omitted (`--no-map`).
+     */
+    mapTokens: number;
   };
   /**
    * Stderr-worthy skip notes (missing / absolute / outside-root listed paths).
@@ -101,6 +128,12 @@ export interface PackOptions {
    * budget remains. Empty / omitted = no boost. Not semantic search.
    */
   focus?: string[];
+  /**
+   * Include a digest map and reserve its tokens from the budget (chars/4).
+   * Default true. `--no-map` disables reservation and omits the map
+   * from formatted output; `--list` still previews files.
+   */
+  map?: boolean;
 }
 
 export interface CollectOptions {

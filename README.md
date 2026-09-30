@@ -99,6 +99,9 @@ contextpack pack . --paths-from paths.txt --list
 
 # Keep raw values (trusted local debug / inspect a false positive)
 contextpack pack . --no-redact
+
+# Bodies only (skip the digest map and its budget reserve)
+contextpack pack . --no-map --budget 4000
 ```
 
 ## What it does
@@ -111,7 +114,8 @@ contextpack pack . --no-redact
 6. Fits within your token budget, keeping the highest-value files
 7. When a file doesn't fully fit, includes a useful prefix (marked as partial) rather than dropping it entirely
 8. Redacts obvious secret-looking substrings in file bodies and diffs (best-effort; `--no-redact` to disable)
-9. Outputs a structured digest (Markdown, JSON, or plain text)
+9. Reserves a compact **Map** of discovered candidates from the budget (included / partial / truncated / skipped), then fits file bodies in what remains. `--no-map` skips the map
+10. Outputs a structured digest (Markdown, JSON, or plain text)
 
 Ignore layers (gitignore syntax), applied in this order:
 
@@ -136,6 +140,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `--paths-from <file>` | Pack only paths listed in a file (one per line; `-` reads stdin). Piped stdin without this flag is the same as `-`. No tree walk |
 | `--no-redact` | Disable best-effort secret redaction (keep raw values; useful to inspect a false positive locally) |
 | `--focus <terms>` | Boost ranking for files matching keywords (comma/space-separated substring on path or content; repeatable). Ranking only — not a filter, not semantic search |
+| `--no-map` | Omit the digest map and do not reserve map tokens from the budget. `--list` still previews files |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
@@ -205,6 +210,8 @@ This is not a security scanner. Short placeholders (`YOUR_API_KEY`, `changeme`) 
 
 Token counts are **estimates**: `characters / 4`. This is good enough for budgeting and fits most tokenizers within ~20%. It is not a model-specific tokenizer—don't use it for billing or exact context window calculations.
 
+The digest **Map** uses the same estimate. Its tokens are reserved from `--budget` before file bodies are selected so the inventory does not silently overflow. `totalTokens` is still the sum of included file bodies. `--no-map` turns that reserve off.
+
 ## Honest numbers
 
 Measured on `fixtures/demo-project` with `npm run benchmark` (chars/4 estimates, not a model tokenizer):
@@ -218,15 +225,17 @@ Methodology and the full table: [docs/benchmark.md](docs/benchmark.md). Re-run w
 
 ## Output formats
 
-- **md** — Markdown digest with summary table and fenced code blocks. Readable by humans, parseable by agents.
-- **json** — Structured payload with file contents, stats, and metadata. For pipelines and tooling.
-- **plain** — Simple separators. Easy to paste or pipe.
+- **md** — Markdown digest with summary table, a **Map** of discovered candidates (included vs left out), and fenced code blocks. Readable by humans, parseable by agents.
+- **json** — Structured payload with `map`, file contents, stats, and metadata. For pipelines and tooling.
+- **plain** — Simple separators plus the same map. Easy to paste or pipe.
+
+The map is the cheap inventory: every discovered candidate, marked `included` / `partial` / `truncated` / `skipped`. `--list` is that same inventory without file bodies. Map tokens are reserved from the budget (chars÷4 of the compact map text) so adding the map does not silently overflow. `totalTokens` remains file bodies only. If the map itself is larger than the budget, the digest still includes the map and omits bodies.
 
 ## Philosophy
 
 - **Pack what matters.** README, manifests, source files. Not lockfiles, not `node_modules`, not binaries.
 - **Respect budgets.** When space is tight, prioritize high-signal files over test fixtures. When a high-priority file doesn't fully fit, include what does (partial inclusion) rather than losing it entirely.
-- **Stay honest.** Token counts are estimates (`chars / 4`). We say so. Partial files are clearly marked.
+- **Stay honest.** Token counts are estimates (`chars / 4`). We say so. Partial files are clearly marked. The map is reserved from the budget so orientation stays cheap without pretending bodies still fit.
 - **Work for both audiences.** Humans need readable digests. Agents need structured context. Same tool.
 
 ## Project layout
@@ -242,6 +251,7 @@ src/
     tokens.ts         # Token estimation
     naive.ts          # Naive dump (benchmark baseline)
     format.ts         # md | json | plain output
+    map.ts            # Digest map (inventory + budget reserve)
     pack.ts           # Orchestrator
     pathsFrom.ts      # --paths-from parse + path safety
     redact.ts         # Best-effort secret redaction
@@ -266,7 +276,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.13** — `--focus <terms>` boosts ranking for files matching keywords (case-insensitive substring on path or packed content / diff text). Ranking only, not a filter, not semantic search. Repeatable; comma- or space-separated. Empty terms are a no-op. Secret redaction, piped path lists, `contextpack init`, `--list`, `--diff` unchanged. Token counts remain characters/4 estimates.
+**v0.1.14** — Digests include a **Map**: a compact inventory of discovered candidates marked included / partial / truncated / skipped. Markdown renders it as a section; JSON exposes `map` + `mapTokens`. Map tokens are reserved from the budget (chars/4 of that compact text) so the map does not silently overflow; `totalTokens` is still file bodies only. `--list` is the same inventory without bodies. `--no-map` skips the map and uses the full budget for bodies. Token counts remain characters/4 estimates.
 
 ## License
 

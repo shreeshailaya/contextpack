@@ -4,6 +4,7 @@ import { selectUnderBudget } from "./budget.js";
 import { parseFocusTerms } from "./focus.js";
 import { getUnifiedDiffs } from "./git.js";
 import { redactSecrets } from "./redact.js";
+import { buildDigestMap, estimateMapTokens } from "./map.js";
 import type { PackOptions, PackResult } from "../types.js";
 
 export interface PackError {
@@ -18,7 +19,9 @@ export type PackReturn =
 /**
  * Pack a directory into a token-budgeted context digest.
  *
- * Architecture note: collect → (diff) → redact → budget-select → (format in CLI).
+ * Architecture note: collect → (diff) → redact → budget-select → map → (format in CLI).
+ * The digest map is reserved from the budget (chars/4) so adding it does not
+ * silently overflow. `--no-map` skips reserve and omits the map from output.
  * `--paths-from` skips the tree walk and collects only the listed paths.
  * Future: ranking plugins, streaming writers, remote sources can plug in here.
  *
@@ -68,7 +71,17 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
 
   const budget = options.budget ?? null;
   const focus = parseFocusTerms(options.focus);
-  const selection = selectUnderBudget(collected, budget, focus);
+  const includeMap = options.map !== false;
+  const selection = selectUnderBudget(collected, budget, focus, { reserveMap: includeMap });
+
+  const map = buildDigestMap({
+    files: selection.files,
+    truncated: selection.truncated,
+    skipped: selection.skipped,
+    candidateTokens: selection.candidateTokens,
+    candidateKinds: selection.candidateKinds,
+  });
+  const mapTokens = includeMap ? estimateMapTokens(map) : 0;
 
   const result: PackResult = {
     root: absRoot,
@@ -77,6 +90,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
     budget,
     truncated: selection.truncated,
     skipped: selection.skipped,
+    map,
     notes,
     ...(focus.length > 0 ? { focus } : {}),
     stats: {
@@ -87,6 +101,7 @@ export function pack(root: string, options: PackOptions = {}): PackResult | Pack
       skipped: selection.skipped.length,
       redacted,
       focused: focus.length > 0 ? selection.focused : 0,
+      mapTokens,
     },
   };
 

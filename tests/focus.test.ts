@@ -129,7 +129,7 @@ describe("pack --focus ranking", () => {
     expect(budget).toBeLessThan(authTokens + otherTokens);
     expect(budget - otherTokens).toBeLessThan(100);
 
-    const focused = pack(root, { budget, focus: ["auth"] });
+    const focused = pack(root, { budget, focus: ["auth"], map: false });
     const authFile = focused.files.find((f) => f.path === "src/auth.ts");
     expect(authFile).toBeDefined();
     expect(authFile?.partial).toBeFalsy();
@@ -137,7 +137,7 @@ describe("pack --focus ranking", () => {
     expect(focused.stats.focused).toBe(1);
     expect(focused.focus).toEqual(["auth"]);
 
-    const baseline = pack(root, { budget });
+    const baseline = pack(root, { budget, map: false });
     const baselineFull = baseline.files.filter((f) => !f.partial).map((f) => f.path);
     expect(baselineFull).toContain("src/other.ts");
     expect(baselineFull).not.toContain("src/auth.ts");
@@ -192,7 +192,7 @@ describe("pack --focus ranking", () => {
     const budget = jwtTokens + 10;
     expect(budget - otherTokens).toBeLessThan(100);
 
-    const result = pack(root, { budget, focus: ["jwt"] });
+    const result = pack(root, { budget, focus: ["jwt"], map: false });
     const tokensFile = result.files.find((f) => f.path === "src/tokens.ts");
     expect(tokensFile).toBeDefined();
     expect(tokensFile?.partial).toBeFalsy();
@@ -215,11 +215,11 @@ describe("pack --focus ranking", () => {
     expect(budget - testTokens).toBeLessThan(100);
     expect(budget).toBeGreaterThanOrEqual(100);
 
-    const focused = pack(root, { budget, focus: ["auth"] });
+    const focused = pack(root, { budget, focus: ["auth"], map: false });
     expect(focused.files.map((f) => f.path)).toContain("tests/auth.test.ts");
     expect(focused.truncated).toContain("src/unrelated.ts");
 
-    const baseline = pack(root, { budget });
+    const baseline = pack(root, { budget, map: false });
     expect(baseline.files.map((f) => f.path)).toContain("src/unrelated.ts");
   });
 
@@ -234,7 +234,7 @@ describe("pack --focus ranking", () => {
     const budget = estimateTokens(readme) + 10;
     expect(budget).toBeLessThan(estimateTokens(readme) + estimateTokens(testFile));
 
-    const result = pack(root, { budget, focus: ["auth"] });
+    const result = pack(root, { budget, focus: ["auth"], map: false });
     const readmeFile = result.files.find((f) => f.path === "README.md");
     expect(readmeFile).toBeDefined();
     expect(readmeFile?.partial).toBeFalsy();
@@ -277,6 +277,7 @@ describe("CLI --focus", () => {
       "--budget",
       budget,
       "--list",
+      "--no-map",
     ]);
 
     expect(exitCode).toBeUndefined();
@@ -378,6 +379,7 @@ describe("pack --focus with --diff", () => {
       diff: true,
       budget,
       focus: ["sessiontokenxyz"],
+      map: false,
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;

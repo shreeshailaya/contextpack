@@ -22,8 +22,9 @@ const FLAG_LIST = `Key flags (do not invent others):
 - \`--format json\` — structured output for tooling
 - \`-o <file>\` — write the digest to a file
 - \`--no-redact\` — disable best-effort secret redaction (default on; not a scanner)
+- \`--no-map\` — omit the digest map (no budget reserve; \`--list\` still previews files)
 
-Token counts are estimates (characters / 4), not a model tokenizer.`;
+Token counts are estimates (characters / 4), not a model tokenizer. Digests include a Map of discovered candidates (included / partial / truncated / skipped); map tokens are reserved from the budget (chars/4).`;
 
 const RECIPES = `Preferred:
 
@@ -104,7 +105,7 @@ ${PREFERRED_INVOKE}
 - Search-scoped: \`${SEARCH_RECIPE}\`
 - Topic boost: \`${FOCUS_RECIPE}\`
 
-Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--focus\`, \`--format json\`, \`-o\`, \`--no-redact\`. Token counts are estimates (chars/4). Secret redaction is best-effort, not a scanner.
+Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--focus\`, \`--format json\`, \`-o\`, \`--no-redact\`, \`--no-map\`. Token counts are estimates (chars/4). The digest Map is reserved from the budget. Secret redaction is best-effort, not a scanner.
 ${AGENTS_SECTION_END}
 `;
 

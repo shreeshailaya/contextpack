@@ -90,6 +90,7 @@ function expectAccurateTemplates(text: string): void {
   expect(text).toContain("--format json");
   expect(text).toContain("-o");
   expect(text).toContain("--no-redact");
+  expect(text).toContain("--no-map");
   expect(text.toLowerCase()).toMatch(/chars\s*\/\s*4|characters\s*\/\s*4/);
   expect(text).not.toMatch(/--watch\b/);
   expect(text).not.toMatch(/--tokens\b/);

@@ -93,7 +93,7 @@ describe("pack budget", () => {
     const smallTokens = estimateTokens(smallContent);
     const budget = smallTokens + 200;
 
-    const result = pack(root, { budget });
+    const result = pack(root, { budget, map: false });
 
     expect(result.totalTokens).toBeLessThanOrEqual(budget);
 
@@ -122,7 +122,7 @@ describe("pack budget", () => {
     const smallTokens = estimateTokens(smallContent);
     const budget = smallTokens + 50;
 
-    const result = pack(root, { budget });
+    const result = pack(root, { budget, map: false });
 
     expect(result.totalTokens).toBeLessThanOrEqual(budget);
 
@@ -149,7 +149,7 @@ describe("pack budget", () => {
     const smallTokens = estimateTokens(smallContent);
     const budget = smallTokens + 150;
 
-    const result = pack(root, { budget });
+    const result = pack(root, { budget, map: false });
 
     expect(result.totalTokens).toBeLessThanOrEqual(budget);
 
@@ -176,9 +176,25 @@ describe("pack budget", () => {
     const smallTokens = estimateTokens(smallContent);
     const budget = smallTokens + 200;
 
-    const result = pack(root, { budget });
+    const result = pack(root, { budget, map: false });
 
     const large = result.files.find((f) => f.path === "src/large.ts");
     expect(large?.partial).toBe(true);
+  });
+
+  it("reserves map tokens so bodies plus map stay within the budget", () => {
+    const root = tmpProject({
+      "a.ts": "a".repeat(200),
+      "b.ts": "b".repeat(200),
+      "c.ts": "c".repeat(200),
+    });
+
+    const budget = 200;
+    const result = pack(root, { budget });
+    expect(result.stats.mapTokens).toBeGreaterThan(0);
+    expect(result.totalTokens + result.stats.mapTokens).toBeLessThanOrEqual(budget);
+    const noMap = pack(root, { budget, map: false });
+    expect(noMap.stats.mapTokens).toBe(0);
+    expect(noMap.totalTokens).toBeGreaterThanOrEqual(result.totalTokens);
   });
 });
