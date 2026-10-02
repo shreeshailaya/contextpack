@@ -105,6 +105,10 @@ contextpack pack . --no-map --budget 4000
 
 # Skip project config for one invocation
 contextpack pack . --no-config --budget 4000
+
+# Honest naive-dump vs packed table (chars/4 estimates)
+contextpack compare .
+contextpack compare ./src --budget 8000
 ```
 
 Optional **project config** sets pack defaults so you do not repeat the same flags. Walk from the pack root upward and stop at the first match: `.contextpack.json`, then `contextpack.json`. If neither exists, a `"contextpack"` key in the nearest `package.json` uses the same schema.
@@ -160,6 +164,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `--no-config` | Skip project config (`.contextpack.json` / `contextpack.json` / `package.json`) |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
+| `compare [path]` | Naive-dump vs packed table (default budgets: 500, 2000, 0). `--budget` is repeatable. `--ignore` / `--include` / `--max-file-bytes` apply to pack() only |
 
 ## For AI coding agents
 
@@ -171,6 +176,9 @@ contextpack pack . --budget 8000 -o context.md
 
 # Boost files matching a topic (substring on path or content; ranking only)
 contextpack pack . --focus auth,jwt --budget 4000 -o context.md
+
+# See how a naive dump compares to packing (chars/4)
+contextpack compare .
 ```
 
 ### Agent setup
@@ -231,14 +239,14 @@ The digest **Map** uses the same estimate. Its tokens are reserved from `--budge
 
 ## Honest numbers
 
-Measured on `fixtures/demo-project` with `npm run benchmark` (chars/4 estimates, not a model tokenizer):
+Measured on `fixtures/demo-project` with `npm run benchmark` / `contextpack compare` (chars/4 estimates, not a model tokenizer):
 
 - **Naive dump** — every text-ish file, no gitignore, no ranking: 8 files, ~1,649 tokens
 - **Packed** — default ignores; budget 500, 2000, or unlimited: 5 files, ~161 tokens (−90%)
 
 The packed tree fits in a 500-token budget, so that 90% is noise filtering (`vendor/`, `build/`, lockfile), not truncation. On this repo's own `src/`, unlimited pack matches a naive dump (already clean); a tight budget then truncates.
 
-Methodology and the full table: [docs/benchmark.md](docs/benchmark.md). Re-run with `npm run benchmark`.
+Methodology and the full table: [docs/benchmark.md](docs/benchmark.md). Re-run on this repo with `npm run benchmark`, or on any directory with `contextpack compare .`.
 
 ## Output formats
 
@@ -267,6 +275,7 @@ src/
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation
     naive.ts          # Naive dump (benchmark baseline)
+    compare.ts        # Naive vs packed table (CLI compare + benchmark)
     format.ts         # md | json | plain output
     map.ts            # Digest map (inventory + budget reserve)
     pack.ts           # Orchestrator
@@ -294,7 +303,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.15** — Optional project config: `.contextpack.json` (or `contextpack.json`, or a `"contextpack"` key in `package.json`) sets pack defaults (budget, format, ignore, include, focus, maxFileBytes, map, redact, quiet). Walks from the pack root upward and stops at the first match. CLI flags always win. `--no-config` skips it. Invocation-specific options (`--since`, `--diff`, `--out`, `--list`, `--paths-from`) stay on the CLI. Token counts remain characters/4 estimates.
+**v0.1.16** — `contextpack compare [path]` prints a naive-dump vs packed table for any directory (default budgets 500 / 2000 / unlimited). Same methodology as `npm run benchmark`: characters/4 estimates; naive = every text-ish file with no gitignore, no default ignores, no ranking, no budget. `--budget` is repeatable; `--ignore` / `--include` / `--max-file-bytes` apply to `pack()` only. See [docs/benchmark.md](docs/benchmark.md).
 
 ## License
 

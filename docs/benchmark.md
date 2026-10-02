@@ -4,13 +4,20 @@ Reproducible comparison of **dumping every text-ish file** against **packing** t
 
 ## How to run
 
-From the repo root, after `npm install`:
+On any directory (product command):
+
+```bash
+contextpack compare .
+contextpack compare ./src --budget 8000
+```
+
+From this repo, after `npm install`, the same methodology plus per-file lists:
 
 ```bash
 npm run benchmark
 ```
 
-That runs `tsx scripts/benchmark.ts`. The script calls `naiveDump()` and the library `pack()` in-process — it does not shell out to a published `contextpack` binary.
+That runs `tsx scripts/benchmark.ts`. Both `compare` and the script call `naiveDump()` and the library `pack()` in-process — they do not shell out to a published `contextpack` binary. Shared table/formatting lives in `src/pack/compare.ts`.
 
 Primary subject: `fixtures/demo-project` (in-repo, deterministic).
 

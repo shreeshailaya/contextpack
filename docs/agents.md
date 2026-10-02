@@ -48,6 +48,7 @@ Use contextpack when an agent needs:
 - **Search-scoped packing** — Pipe `rg -l` into `contextpack pack` when you already know the relevant files (`--paths-from` is the explicit form)
 - **Topic-ranked packing** — Use `--focus auth,jwt` to boost files matching keywords without leaving the tool (substring match, ranking only)
 - **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
+- **Honest naive vs packed** — Use `contextpack compare .` to see how a dump of every text-ish file compares to packing (same methodology as `npm run benchmark`)
 
 ## Project config
 
@@ -87,6 +88,15 @@ contextpack pack . --list --format json --budget 8000
 ```
 
 This is useful for agents to plan context before committing to a pack, or to tune budget honestly. Statuses and token estimates match the digest **Map** (same inventory, no file bodies). Map tokens are reserved from the budget unless you pass `--no-map`.
+
+To compare a raw dump against packing (chars/4 estimates; naive = no gitignore / no default ignores / no ranking / no budget):
+
+```bash
+contextpack compare .
+contextpack compare ./src --budget 500 --budget 2000 --budget 0
+```
+
+See [benchmark.md](./benchmark.md).
 
 ## Integration patterns
 
@@ -287,3 +297,4 @@ Use `--no-redact` only when you need raw values (for example, to inspect a false
 - **Reuse existing agent ignores** — Drop a `.cursorignore` (or `.aiignore` / `.copilotignore`) at the pack root; no extra flags needed
 - **Treat redaction as a seatbelt** — default-on, best-effort, not a scan. Use `--no-redact` only in a trusted local context
 - **Set repo defaults in `.contextpack.json`** — budget, ignore, and focus without repeating flags. CLI still wins; `--no-config` skips it
+- **Compare before packing a huge tree** — `contextpack compare .` shows naive dump vs packed at 500 / 2000 / unlimited (chars/4; same methodology as `npm run benchmark`)
