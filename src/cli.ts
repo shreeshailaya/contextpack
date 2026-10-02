@@ -7,6 +7,13 @@ import { formatPack, formatList } from "./pack/format.js";
 import { formatTokenCount } from "./pack/tokens.js";
 import { parsePathList, readPathsFromSource, resolvePathsFromOption } from "./pack/pathsFrom.js";
 import { parseFocusTerms } from "./pack/focus.js";
+import {
+  ConfigError,
+  formatUnknownKeysWarning,
+  loadProjectConfig,
+  mergeConfigWithCli,
+  type LoadedConfig,
+} from "./pack/config.js";
 import { formatInitSummary, InitError, runInit } from "./init/init.js";
 import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
@@ -101,6 +108,10 @@ export function createProgram(): Command {
       "--no-map",
       "omit the digest map and do not reserve map tokens from the budget (--list still previews files)",
     )
+    .option(
+      "--no-config",
+      "skip loading project config (.contextpack.json / contextpack.json / package.json)",
+    )
     .addHelpText(
       "after",
       `
@@ -124,10 +135,12 @@ Examples:
   $ contextpack pack . --focus auth,jwt --budget 4000
   $ contextpack pack . --focus "login session" --list
   $ contextpack pack . --no-map --budget 4000        # Bodies only; no map reserve
+  $ contextpack pack . --no-config                   # Ignore .contextpack.json / package.json
 
 Notes:
   Token counts are estimates (characters / 4), not model-specific.
-  Ignore layers: built-in defaults, then optional root .gitignore / .cursorignore / .aiignore / .copilotignore, then CLI --ignore. --include wins over ignores.
+  Ignore layers: built-in defaults, then optional root .gitignore / .cursorignore / .aiignore / .copilotignore, then extra ignores from project config or CLI --ignore (CLI replaces config when passed). --include wins over ignores.
+  Optional project config (.contextpack.json, contextpack.json, or a "contextpack" key in package.json) sets pack defaults. Walks from the pack root upward. CLI flags always win. --no-config skips it. Do not put --since / --diff / --out / --list / --paths-from in config.
   --since requires git and a valid ref; includes modified, added, and untracked files.
   --diff requires --since. Tracked changes are packed as unified diffs; untracked files stay full content.
   A piped or redirected path list (non-TTY stdin) is treated as --paths-from - when the flag is omitted. Interactive terminals still walk the tree.
@@ -136,8 +149,8 @@ Notes:
   --focus is a case-insensitive substring match on relative path and packed content (or diff text with --diff). It boosts ranking only — non-matching files can still pack if budget remains. Empty terms are a no-op. Not semantic search.
   Digests include a Map of discovered candidates (included / partial / truncated / skipped). Map tokens are reserved from the budget (chars/4 of the compact inventory) so the map does not silently overflow. totalTokens is still file bodies only. --list is that same inventory without bodies. --no-map skips the map and uses the full budget for bodies.`,
     )
-    .action((targetPath: string, opts) => {
-      runPack(targetPath, opts);
+    .action((targetPath: string, opts: PackCliOpts, command: Command) => {
+      runPack(targetPath, opts, command);
     });
 
   program
@@ -205,9 +218,18 @@ interface PackCliOpts {
   redact?: boolean;
   focus?: string[];
   map?: boolean;
+  /**
+   * Commander `--no-config`: defaults to true (load config).
+   * `false` when the user passed `--no-config`.
+   */
+  config?: boolean;
 }
 
-function runPack(targetPath: string, opts: PackCliOpts): void {
+function fromCli(command: Command, name: string): boolean {
+  return command.getOptionValueSource(name) === "cli";
+}
+
+function runPack(targetPath: string, opts: PackCliOpts, command: Command): void {
   const root = path.resolve(targetPath);
 
   if (!fs.existsSync(root)) {
@@ -223,7 +245,52 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     return;
   }
 
-  const effectiveBudget = opts.budget === 0 ? null : opts.budget;
+  let loaded: LoadedConfig | null = null;
+  if (opts.config !== false) {
+    try {
+      loaded = loadProjectConfig(root);
+    } catch (err) {
+      const message = err instanceof ConfigError || err instanceof Error ? err.message : String(err);
+      console.error(`error: ${message}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const merged = mergeConfigWithCli(
+    loaded,
+    {
+      budget: opts.budget,
+      format: opts.format,
+      ignore: opts.ignore,
+      include: opts.include,
+      maxFileBytes: opts.maxFileBytes,
+      quiet: Boolean(opts.quiet),
+      redact: opts.redact !== false,
+      focus: opts.focus ?? [],
+      map: opts.map !== false,
+    },
+    {
+      budget: fromCli(command, "budget"),
+      format: fromCli(command, "format"),
+      ignore: fromCli(command, "ignore"),
+      include: fromCli(command, "include"),
+      maxFileBytes: fromCli(command, "maxFileBytes"),
+      quiet: fromCli(command, "quiet"),
+      redact: fromCli(command, "redact"),
+      focus: fromCli(command, "focus"),
+      map: fromCli(command, "map"),
+    },
+  );
+
+  if (loaded) {
+    const warning = formatUnknownKeysWarning(loaded);
+    if (warning) {
+      console.error(`contextpack: ${warning}`);
+    }
+  }
+
+  const effectiveBudget = merged.budget === 0 ? null : merged.budget;
 
   if (opts.diff && !opts.since) {
     console.error("error: --diff requires --since");
@@ -247,15 +314,15 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
 
   const packOptions = {
     budget: effectiveBudget,
-    ignore: opts.ignore,
-    include: opts.include,
-    maxFileBytes: opts.maxFileBytes,
+    ignore: merged.ignore,
+    include: merged.include,
+    maxFileBytes: merged.maxFileBytes,
     since: opts.since,
     diff: opts.diff,
     paths: listedPaths,
-    redact: opts.redact !== false,
-    focus: parseFocusTerms(opts.focus),
-    map: opts.map !== false,
+    redact: merged.redact,
+    focus: parseFocusTerms(merged.focus),
+    map: merged.map,
   };
 
   let result: PackResult;
@@ -272,56 +339,63 @@ function runPack(targetPath: string, opts: PackCliOpts): void {
     result = pack(root, packOptions);
   }
 
-  if (!opts.quiet && result.notes.length > 0) {
+  const quiet = merged.quiet;
+  const configNote = loaded && !quiet ? `config: ${loaded.sourceLabel}` : null;
+
+  if (!quiet && result.notes.length > 0) {
     for (const note of result.notes) {
       console.error(`contextpack: ${note}`);
     }
   }
 
   if (opts.list) {
-    const listFormat: ListFormat = opts.format === "json" ? "json" : "plain";
+    const listFormat: ListFormat = merged.format === "json" ? "json" : "plain";
     const output = formatList(result, listFormat);
 
     if (opts.out) {
       const outPath = path.resolve(opts.out);
       fs.mkdirSync(path.dirname(outPath), { recursive: true });
       fs.writeFileSync(outPath, output, "utf8");
-      if (!opts.quiet) {
-        printListSummary(result, outPath);
+      if (!quiet) {
+        printListSummary(result, outPath, configNote);
       }
     } else {
       process.stdout.write(output);
       if (!output.endsWith("\n")) process.stdout.write("\n");
-      if (!opts.quiet) {
-        printListSummary(result, null);
+      if (!quiet) {
+        printListSummary(result, null, configNote);
       }
     }
     return;
   }
 
-  const output = formatPack(result, opts.format);
+  const output = formatPack(result, merged.format);
 
   if (opts.out) {
     const outPath = path.resolve(opts.out);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, output, "utf8");
-    if (!opts.quiet) {
-      printSummary(result, outPath);
+    if (!quiet) {
+      printSummary(result, outPath, configNote);
     }
   } else {
     process.stdout.write(output);
     if (!output.endsWith("\n")) process.stdout.write("\n");
-    if (!opts.quiet) {
-      printSummary(result, null);
+    if (!quiet) {
+      printSummary(result, null, configNote);
     }
   }
 }
 
-function printSummary(result: PackResult, outPath: string | null): void {
+function printSummary(result: PackResult, outPath: string | null, configNote: string | null): void {
   const parts: string[] = [];
 
   if (outPath) {
     parts.push(`wrote ${outPath}`);
+  }
+
+  if (configNote) {
+    parts.push(configNote);
   }
 
   parts.push(`${result.stats.included} files`);
@@ -358,11 +432,19 @@ function printSummary(result: PackResult, outPath: string | null): void {
   console.error(`contextpack: ${parts.join(" · ")}`);
 }
 
-function printListSummary(result: PackResult, outPath: string | null): void {
+function printListSummary(
+  result: PackResult,
+  outPath: string | null,
+  configNote: string | null,
+): void {
   const parts: string[] = [];
 
   if (outPath) {
     parts.push(`wrote preview to ${outPath}`);
+  }
+
+  if (configNote) {
+    parts.push(configNote);
   }
 
   parts.push(`${result.stats.included} would be included`);

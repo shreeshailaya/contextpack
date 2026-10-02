@@ -65,6 +65,7 @@ src/
     pathsFrom.ts      # --paths-from parse + path safety
     redact.ts         # Best-effort secret redaction (not a scanner)
     focus.ts          # --focus term parse + substring match
+    config.ts         # .contextpack.json / package.json defaults
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest tests
 docs/                 # Documentation

@@ -49,6 +49,18 @@ Use contextpack when an agent needs:
 - **Topic-ranked packing** — Use `--focus auth,jwt` to boost files matching keywords without leaving the tool (substring match, ranking only)
 - **Budget planning** — Use `--list` to preview which files fit under a token budget before packing
 
+## Project config
+
+Set pack defaults once so agents do not repeat `--budget` / `--ignore` / `--focus`. Walk from the pack root upward: `.contextpack.json`, then `contextpack.json`, then a `"contextpack"` key in `package.json`. CLI flags always win. `--no-config` skips the file. Do not put `--since`, `--diff`, `--out`, `--list`, or `--paths-from` in config.
+
+```json
+{
+  "budget": 8000,
+  "ignore": ["fixtures/**"],
+  "focus": ["auth"]
+}
+```
+
 ## Basic usage
 
 ```bash
@@ -253,7 +265,7 @@ Agents already declare what not to feed models via ignore files. When packing, c
 
 Same gitignore syntax as `.gitignore`. Unreadable files are skipped. Layer order:
 
-`DEFAULT_IGNORES` → `.gitignore` → `.cursorignore` → `.aiignore` → `.copilotignore` → CLI `--ignore`
+`DEFAULT_IGNORES` → `.gitignore` → `.cursorignore` → `.aiignore` → `.copilotignore` → extra ignores (project config `ignore`, or CLI `--ignore` if passed)
 
 `--include` still force-includes matched paths over any of those layers.
 
@@ -274,3 +286,4 @@ Use `--no-redact` only when you need raw values (for example, to inspect a false
 - **Check truncated files** — The digest lists files that didn't fit; pack them separately if needed
 - **Reuse existing agent ignores** — Drop a `.cursorignore` (or `.aiignore` / `.copilotignore`) at the pack root; no extra flags needed
 - **Treat redaction as a seatbelt** — default-on, best-effort, not a scan. Use `--no-redact` only in a trusted local context
+- **Set repo defaults in `.contextpack.json`** — budget, ignore, and focus without repeating flags. CLI still wins; `--no-config` skips it

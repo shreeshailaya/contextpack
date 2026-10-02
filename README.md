@@ -102,7 +102,23 @@ contextpack pack . --no-redact
 
 # Bodies only (skip the digest map and its budget reserve)
 contextpack pack . --no-map --budget 4000
+
+# Skip project config for one invocation
+contextpack pack . --no-config --budget 4000
 ```
+
+Optional **project config** sets pack defaults so you do not repeat the same flags. Walk from the pack root upward and stop at the first match: `.contextpack.json`, then `contextpack.json`. If neither exists, a `"contextpack"` key in the nearest `package.json` uses the same schema.
+
+```json
+{
+  "budget": 8000,
+  "format": "md",
+  "ignore": ["fixtures/**"],
+  "focus": ["auth", "jwt"]
+}
+```
+
+CLI flags always win. `--since`, `--diff`, `--out`, `--list`, and `--paths-from` stay on the command line (not config keys). `--no-config` skips the file.
 
 ## What it does
 
@@ -119,7 +135,7 @@ contextpack pack . --no-map --budget 4000
 
 Ignore layers (gitignore syntax), applied in this order:
 
-`DEFAULT_IGNORES` → `.gitignore` → `.cursorignore` → `.aiignore` → `.copilotignore` → CLI `--ignore`
+`DEFAULT_IGNORES` → `.gitignore` → `.cursorignore` → `.aiignore` → `.copilotignore` → extra ignores (project config `ignore`, or CLI `--ignore` if you passed the flag — CLI replaces config)
 
 Agent ignore files are optional and only read from the pack root when present (not nested per-directory). `--include` still force-includes matched paths and wins over ignores.
 
@@ -141,6 +157,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `--no-redact` | Disable best-effort secret redaction (keep raw values; useful to inspect a false positive locally) |
 | `--focus <terms>` | Boost ranking for files matching keywords (comma/space-separated substring on path or content; repeatable). Ranking only — not a filter, not semantic search |
 | `--no-map` | Omit the digest map and do not reserve map tokens from the budget. `--list` still previews files |
+| `--no-config` | Skip project config (`.contextpack.json` / `contextpack.json` / `package.json`) |
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 
@@ -256,6 +273,7 @@ src/
     pathsFrom.ts      # --paths-from parse + path safety
     redact.ts         # Best-effort secret redaction
     focus.ts          # --focus term parse + substring match
+    config.ts         # .contextpack.json / package.json defaults
   ignore/defaults.ts  # Built-in ignore patterns
 tests/                # Vitest
 scripts/
@@ -276,7 +294,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.14** — Digests include a **Map**: a compact inventory of discovered candidates marked included / partial / truncated / skipped. Markdown renders it as a section; JSON exposes `map` + `mapTokens`. Map tokens are reserved from the budget (chars/4 of that compact text) so the map does not silently overflow; `totalTokens` is still file bodies only. `--list` is the same inventory without bodies. `--no-map` skips the map and uses the full budget for bodies. Token counts remain characters/4 estimates.
+**v0.1.15** — Optional project config: `.contextpack.json` (or `contextpack.json`, or a `"contextpack"` key in `package.json`) sets pack defaults (budget, format, ignore, include, focus, maxFileBytes, map, redact, quiet). Walks from the pack root upward and stops at the first match. CLI flags always win. `--no-config` skips it. Invocation-specific options (`--since`, `--diff`, `--out`, `--list`, `--paths-from`) stay on the CLI. Token counts remain characters/4 estimates.
 
 ## License
 
