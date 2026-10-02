@@ -40,6 +40,9 @@ contextpack pack . --focus auth,jwt --budget 4000
 
 # Pack only files an agent already found (e.g. ripgrep)
 rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
+
+# Honest naive-dump vs packed table (chars/4; same as npm run benchmark)
+contextpack compare .
 ```
 
 See [docs/agents.md](./docs/agents.md) for detailed integration patterns.
@@ -60,6 +63,7 @@ src/
     budget.ts         # Priority ranking + selection
     tokens.ts         # Token estimation (chars/4)
     naive.ts          # Naive dump (benchmark baseline)
+    compare.ts        # Naive vs packed table (CLI compare + benchmark)
     format.ts         # Output formatters (md/json/plain)
     map.ts            # Digest map (inventory + budget reserve)
     pathsFrom.ts      # --paths-from parse + path safety

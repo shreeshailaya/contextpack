@@ -15,6 +15,12 @@ import {
   type LoadedConfig,
 } from "./pack/config.js";
 import { formatInitSummary, InitError, runInit } from "./init/init.js";
+import {
+  CompareError,
+  DEFAULT_COMPARE_BUDGETS,
+  compareDirectory,
+  formatCompareReport,
+} from "./pack/compare.js";
 import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
 function getVersion(): string {
@@ -178,6 +184,59 @@ Writes (create only if missing unless --force):
       runInitCommand(targetPath, opts);
     });
 
+  program
+    .command("compare")
+    .description("Print a naive-dump vs packed table for a directory")
+    .argument("[path]", "directory to compare", ".")
+    .option(
+      "-b, --budget <tokens>",
+      `token budget to pack at (repeatable). Default: ${DEFAULT_COMPARE_BUDGETS.join(", ")}`,
+      collectBudgets,
+      [] as number[],
+    )
+    .option(
+      "-i, --ignore <pattern>",
+      "extra ignore pattern for pack() only (gitignore syntax; repeatable)",
+      collect,
+      [] as string[],
+    )
+    .option(
+      "--include <pattern>",
+      "force-include pattern for pack() only (overrides ignores; repeatable)",
+      collect,
+      [] as string[],
+    )
+    .option(
+      "--max-file-bytes <n>",
+      "skip packed files larger than this many bytes (default 524288; pack() only)",
+      (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n) || n < 1) {
+          throw new Error(`Invalid --max-file-bytes: ${v}`);
+        }
+        return Math.floor(n);
+      },
+    )
+    .addHelpText(
+      "after",
+      `
+Examples:
+  $ contextpack compare                         # Current dir at 500, 2000, unlimited
+  $ contextpack compare ./src                   # Compare a subdirectory
+  $ contextpack compare . --budget 8000         # Single budget
+  $ contextpack compare . --budget 500 --budget 2000 --budget 0
+
+Notes:
+  Token estimates are characters / 4, not a model tokenizer.
+  Naive dump = every text-ish file with NO gitignore, NO default ignores, NO ranking, NO budget.
+  Packed rows call pack() in-process (same methodology as npm run benchmark).
+  --ignore / --include / --max-file-bytes apply to pack() only; naive stays raw.
+  See docs/benchmark.md for the methodology.`,
+    )
+    .action((targetPath: string, opts: CompareCliOpts) => {
+      runCompare(targetPath, opts);
+    });
+
   return program;
 }
 
@@ -185,6 +244,31 @@ interface InitCliOpts {
   force?: boolean;
   agents?: boolean;
   quiet?: boolean;
+}
+
+interface CompareCliOpts {
+  budget: number[];
+  ignore: string[];
+  include: string[];
+  maxFileBytes?: number;
+}
+
+function runCompare(targetPath: string, opts: CompareCliOpts): void {
+  try {
+    const result = compareDirectory(targetPath, {
+      budgets: opts.budget.length > 0 ? opts.budget : DEFAULT_COMPARE_BUDGETS,
+      ignore: opts.ignore,
+      include: opts.include,
+      maxFileBytes: opts.maxFileBytes,
+    });
+    const output = formatCompareReport(result);
+    process.stdout.write(output);
+    if (!output.endsWith("\n")) process.stdout.write("\n");
+  } catch (err) {
+    const message = err instanceof CompareError || err instanceof Error ? err.message : String(err);
+    console.error(`error: ${message}`);
+    process.exitCode = 1;
+  }
 }
 
 function runInitCommand(targetPath: string, opts: InitCliOpts): void {
@@ -495,4 +579,8 @@ function parseFormat(value: string): OutputFormat {
 
 function collect(value: string, previous: string[]): string[] {
   return previous.concat([value]);
+}
+
+function collectBudgets(value: string, previous: number[]): number[] {
+  return previous.concat([parseBudget(value)]);
 }

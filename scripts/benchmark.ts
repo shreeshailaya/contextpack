@@ -3,6 +3,7 @@
  *
  * Run: `npm run benchmark`
  *
+ * Same methodology as `contextpack compare` — see `src/pack/compare.ts`.
  * Every number printed here is computed in this process. Token figures are
  * estimates (`characters / 4`), the same heuristic `pack()` uses — not a
  * model-specific tokenizer.
@@ -15,83 +16,21 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { naiveDump, type NaiveDump } from "../src/pack/naive.js";
-import { pack } from "../src/pack/pack.js";
-import type { PackResult } from "../src/types.js";
+import {
+  DEFAULT_COMPARE_BUDGETS,
+  compareDirectory,
+  fmtInt,
+  formatCompareMethodology,
+  formatCompareTable,
+  type ComparePackRow,
+} from "../src/pack/compare.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Budgets in tokens (chars/4). `0` means unlimited, same as the CLI. */
-const BUDGETS = [500, 2000, 0] as const;
-
-interface PackRow {
-  label: string;
-  budget: number;
-  result: PackResult;
-}
-
-function packAt(root: string, budget: number): PackRow {
-  const result = pack(root, { budget });
-  const label = budget === 0 ? "Pack unlimited (0)" : `Pack budget ${budget}`;
-  return { label, budget, result };
-}
-
-function savingsPct(naiveTokens: number, packedTokens: number): string {
-  if (naiveTokens <= 0) return "n/a";
-  const pct = ((naiveTokens - packedTokens) / naiveTokens) * 100;
-  if (Math.abs(pct) < 0.05) return "0%";
-  const rounded = pct.toFixed(0);
-  return pct > 0 ? `-${rounded}%` : `+${Math.abs(Number(rounded))}%`;
-}
-
-function fmtInt(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
-function pad(s: string, width: number, align: "left" | "right" = "left"): string {
-  if (s.length >= width) return s;
-  const fill = " ".repeat(width - s.length);
-  return align === "right" ? fill + s : s + fill;
-}
-
-function printTable(naive: NaiveDump, rows: PackRow[]): void {
-  const header = [
-    pad("Mode", 24),
-    pad("Files", 7, "right"),
-    pad("~Tokens (est.)", 16, "right"),
-    pad("vs naive", 10, "right"),
-    pad("Truncated", 11, "right"),
-    pad("Partial", 9, "right"),
-  ].join("  ");
-  const rule = "-".repeat(header.length);
-  console.log(header);
-  console.log(rule);
-  console.log(
-    [
-      pad("Naive dump", 24),
-      pad(fmtInt(naive.fileCount), 7, "right"),
-      pad(fmtInt(naive.totalTokens), 16, "right"),
-      pad("—", 10, "right"),
-      pad("—", 11, "right"),
-      pad("—", 9, "right"),
-    ].join("  "),
-  );
-  for (const row of rows) {
-    const partial = row.result.files.filter((f) => f.partial).length;
-    console.log(
-      [
-        pad(row.label, 24),
-        pad(fmtInt(row.result.stats.included), 7, "right"),
-        pad(fmtInt(row.result.totalTokens), 16, "right"),
-        pad(savingsPct(naive.totalTokens, row.result.totalTokens), 10, "right"),
-        pad(fmtInt(row.result.stats.truncated), 11, "right"),
-        pad(fmtInt(partial), 9, "right"),
-      ].join("  "),
-    );
-  }
-}
-
-function printFileList(title: string, files: { path?: string; relPath?: string; tokens: number; partial?: boolean }[]): void {
+function printFileList(
+  title: string,
+  files: { path?: string; relPath?: string; tokens: number; partial?: boolean }[],
+): void {
   console.log(title);
   if (files.length === 0) {
     console.log("  (none)");
@@ -105,41 +44,37 @@ function printFileList(title: string, files: { path?: string; relPath?: string; 
 }
 
 function runSubject(name: string, root: string): void {
-  const naive = naiveDump(root);
-  const rows = BUDGETS.map((b) => packAt(root, b));
+  const compared = compareDirectory(root, { budgets: DEFAULT_COMPARE_BUDGETS });
 
   console.log("");
   console.log(`## ${name}`);
-  console.log(`Root: ${path.relative(repoRoot, root) || "."}`);
+  console.log(`Root: ${path.relative(repoRoot, compared.root) || "."}`);
   console.log("");
-  printTable(naive, rows);
+  console.log(formatCompareTable(compared.naive, compared.rows));
   console.log("");
-  printFileList("Naive dump files:", naive.files);
+  printFileList("Naive dump files:", compared.naive.files);
   console.log("");
-  for (const row of rows) {
+  for (const row of compared.rows) {
     printFileList(`${row.label} — included:`, row.result.files);
-    if (row.result.truncated.length > 0) {
-      console.log(`${row.label} — truncated (over budget):`);
-      for (const p of row.result.truncated) {
-        console.log(`  ${p}`);
-      }
-    } else if (row.budget > 0) {
-      console.log(`${row.label} — truncated: (none; selection fit the budget)`);
-    }
+    printTruncated(row);
     console.log("");
+  }
+}
+
+function printTruncated(row: ComparePackRow): void {
+  if (row.result.truncated.length > 0) {
+    console.log(`${row.label} — truncated (over budget):`);
+    for (const p of row.result.truncated) {
+      console.log(`  ${p}`);
+    }
+  } else if (row.budget > 0) {
+    console.log(`${row.label} — truncated: (none; selection fit the budget)`);
   }
 }
 
 function main(): void {
   console.log("contextpack benchmark");
-  console.log("Token estimates: characters / 4 (not a model tokenizer).");
-  console.log("");
-  console.log("Naive dump means:");
-  console.log("  - every text-ish file (known text extensions/basenames, or extensionless + no NUL)");
-  console.log("  - NO .gitignore, NO default ignores, NO ranking, NO budget");
-  console.log("  - still skips .git/, symlinks, unreadable files, and NUL (binary) files");
-  console.log("");
-  console.log("Packed rows call pack() from src/pack/pack.ts in-process.");
+  console.log(formatCompareMethodology());
 
   const fixture = path.join(repoRoot, "fixtures", "demo-project");
   runSubject("fixtures/demo-project (primary)", fixture);
