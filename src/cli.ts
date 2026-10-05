@@ -21,6 +21,7 @@ import {
   compareDirectory,
   formatCompareReport,
 } from "./pack/compare.js";
+import { runMcpStdio } from "./mcp/server.js";
 import type { OutputFormat, ListFormat, PackResult } from "./types.js";
 
 function getVersion(): string {
@@ -178,6 +179,10 @@ Examples:
 Writes (create only if missing unless --force):
   .cursor/rules/contextpack.mdc
   skills/contextpack/SKILL.md
+
+Does not write .cursor/mcp.json (that would clobber an existing MCP config).
+To connect an MCP host, see README "Use with agents (MCP)":
+  npx -y -p @shree_vitkar/contextpack contextpack mcp
 `,
     )
     .action((targetPath: string, opts: InitCliOpts) => {
@@ -235,6 +240,27 @@ Notes:
     )
     .action((targetPath: string, opts: CompareCliOpts) => {
       runCompare(targetPath, opts);
+    });
+
+  program
+    .command("mcp")
+    .description("Run a Model Context Protocol server on stdio (pack and list tools)")
+    .addHelpText(
+      "after",
+      `
+Starts an MCP server on stdin/stdout. Logs go to stderr — stdout is protocol-only.
+
+  $ contextpack mcp
+  $ npx -y -p @shree_vitkar/contextpack contextpack mcp
+
+Tools: pack (digest), list (dry-run map / budget preview). Default root is the process cwd.
+Absolute paths and .. escapes outside cwd are rejected. Secret redaction is on.
+Project config (.contextpack.json) is respected the same way as pack.
+
+See README "Use with agents (MCP)" for Claude Code / Cursor / generic mcpServers config.`,
+    )
+    .action(async () => {
+      await runMcpStdio({ cwd: process.cwd(), version: VERSION });
     });
 
   return program;
@@ -583,4 +609,25 @@ function collect(value: string, previous: string[]): string[] {
 
 function collectBudgets(value: string, previous: number[]): number[] {
   return previous.concat([parseBudget(value)]);
+}
+
+/** Allow `node dist/cli.js …` (same as the bin entry `dist/index.js`). */
+function isDirectCliEntry(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return path.resolve(entry) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectCliEntry()) {
+  createProgram()
+    .parseAsync(process.argv)
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`error: ${message}`);
+      process.exitCode = 1;
+    });
 }

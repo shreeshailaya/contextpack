@@ -43,6 +43,9 @@ rg -l 'JWT|auth' -g '*.ts' | contextpack pack . --budget 8000
 
 # Honest naive-dump vs packed table (chars/4; same as npm run benchmark)
 contextpack compare .
+
+# MCP server on stdio (pack + list tools; default root = cwd)
+npx -y -p @shree_vitkar/contextpack contextpack mcp
 ```
 
 See [docs/agents.md](./docs/agents.md) for detailed integration patterns.
@@ -56,6 +59,7 @@ src/
   cli.ts              # Commander CLI entry
   index.ts            # bin entry
   types.ts            # TypeScript interfaces
+  mcp/                # contextpack mcp (stdio MCP server: pack + list)
   init/               # contextpack init (agent drop-in files)
   pack/
     pack.ts           # Main orchestrator

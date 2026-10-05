@@ -27,6 +27,57 @@ If you install globally and `contextpack` is not recognized, add your npm prefix
 
 > **Note:** The package is scoped `@shree_vitkar/contextpack` but the CLI binary name is `contextpack`.
 
+## MCP (no shell-out)
+
+When the host speaks [MCP](https://modelcontextprotocol.io) (Claude Code, Cursor, Codex, VS Code Copilot, Windsurf, …), run the stdio server instead of invoking the CLI for every pack:
+
+```bash
+npx -y -p @shree_vitkar/contextpack contextpack mcp
+```
+
+**Claude Code**
+
+```bash
+claude mcp add contextpack -- npx -y -p @shree_vitkar/contextpack contextpack mcp
+```
+
+**Cursor** — `.cursor/mcp.json` (create this yourself; `contextpack init` does not write it, so it will not clobber an existing MCP config):
+
+```json
+{
+  "mcpServers": {
+    "contextpack": {
+      "command": "npx",
+      "args": ["-y", "-p", "@shree_vitkar/contextpack", "contextpack", "mcp"]
+    }
+  }
+}
+```
+
+**Generic** `mcpServers` block:
+
+```json
+{
+  "mcpServers": {
+    "contextpack": {
+      "command": "npx",
+      "args": ["-y", "-p", "@shree_vitkar/contextpack", "contextpack", "mcp"]
+    }
+  }
+}
+```
+
+Tools:
+
+| Tool | What it does |
+| --- | --- |
+| `pack` | Token-budgeted digest (`md` or `json`). Args: `path`/`root`, `budget`, `focus`, `since`, `diff`, `paths`, `ignore`, `include`, `format`, `noMap`. |
+| `list` | Same inventory as the digest map / `--list` (no file bodies). Use it to plan a budget before `pack`. Default format is `json`. |
+
+Default root is the MCP server process cwd. Paths must be relative; absolute paths and `..` escapes outside cwd (or, for `paths`, outside the pack root) are rejected — same rules as `--paths-from`. Secret redaction is on. `.contextpack.json` / `contextpack.json` / `package.json#contextpack` are loaded from the pack root the same way as the CLI.
+
+`compare` is not an MCP tool. It is a human-facing naive-dump vs packed table (`contextpack compare .`).
+
 ## Install into a repo
 
 Write drop-in Cursor rule + skill files so agents know when and how to run contextpack (no long docs page required):
@@ -36,6 +87,8 @@ npx -p @shree_vitkar/contextpack contextpack init
 ```
 
 Creates `.cursor/rules/contextpack.mdc` and `skills/contextpack/SKILL.md` if they are missing. Pass `--force` to overwrite, `--agents` to create or append a short `AGENTS.md` section.
+
+`contextpack init` still writes a Cursor rule + skill that mention the CLI recipes (and now mention MCP). It does not write `.cursor/mcp.json`.
 
 ## When to use contextpack
 
@@ -298,3 +351,4 @@ Use `--no-redact` only when you need raw values (for example, to inspect a false
 - **Treat redaction as a seatbelt** — default-on, best-effort, not a scan. Use `--no-redact` only in a trusted local context
 - **Set repo defaults in `.contextpack.json`** — budget, ignore, and focus without repeating flags. CLI still wins; `--no-config` skips it
 - **Compare before packing a huge tree** — `contextpack compare .` shows naive dump vs packed at 500 / 2000 / unlimited (chars/4; same methodology as `npm run benchmark`)
+- **Prefer MCP when the host supports it** — `contextpack mcp` exposes `pack` and `list` on stdio so the agent does not have to shell out. `compare` stays CLI-only

@@ -93,7 +93,7 @@ export function skipNote(reason: PathSkipReason, listed: string): string {
   }
 }
 
-function looksAbsolute(p: string): boolean {
+export function looksAbsolute(p: string): boolean {
   if (path.isAbsolute(p)) return true;
   if (p.startsWith("/") || p.startsWith("\\")) return true;
   if (/^[a-zA-Z]:[\\/]/.test(p)) return true;
@@ -101,11 +101,19 @@ function looksAbsolute(p: string): boolean {
   return false;
 }
 
-function isOutsideRoot(absRoot: string, absPath: string): boolean {
+export function isOutsideRoot(absRoot: string, absPath: string): boolean {
   const rel = path.relative(absRoot, absPath);
   if (rel === "") return true;
   const posix = rel.split(path.sep).join("/");
   return posix === ".." || posix.startsWith("../") || path.isAbsolute(rel);
+}
+
+/** True when `absPath` is `absRoot` or a descendant (absolute / `..` escapes fail). */
+export function staysWithinRoot(absRoot: string, absPath: string): boolean {
+  const root = path.resolve(absRoot);
+  const resolved = path.resolve(absPath);
+  if (root === resolved) return true;
+  return !isOutsideRoot(root, resolved);
 }
 
 function toPosix(p: string): string {

@@ -55,6 +55,48 @@ contextpack pack .
 
 > **Note:** The package is scoped `@shree_vitkar/contextpack` but the CLI binary name is `contextpack`.
 
+## Use with agents (MCP)
+
+`contextpack mcp` is a stdio [MCP](https://modelcontextprotocol.io) server. Agents call `pack` (digest) and `list` (budget preview / map, no file bodies) instead of shelling out. Default root is the server process cwd. Absolute paths and `..` escapes outside cwd are rejected. Secret redaction is on. Project config (`.contextpack.json`) is respected the same way as the CLI.
+
+```bash
+npx -y -p @shree_vitkar/contextpack contextpack mcp
+```
+
+**Claude Code**
+
+```bash
+claude mcp add contextpack -- npx -y -p @shree_vitkar/contextpack contextpack mcp
+```
+
+**Cursor** — `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "contextpack": {
+      "command": "npx",
+      "args": ["-y", "-p", "@shree_vitkar/contextpack", "contextpack", "mcp"]
+    }
+  }
+}
+```
+
+**Generic** `mcpServers` block (Claude Desktop, VS Code Copilot, Windsurf, Codex, and others that use this shape):
+
+```json
+{
+  "mcpServers": {
+    "contextpack": {
+      "command": "npx",
+      "args": ["-y", "-p", "@shree_vitkar/contextpack", "contextpack", "mcp"]
+    }
+  }
+}
+```
+
+`compare` stays CLI-only (a human-facing naive-vs-packed table, not something an agent needs in the loop). More patterns: [docs/agents.md](./docs/agents.md).
+
 ## Usage
 
 ```bash
@@ -165,6 +207,7 @@ Agent ignore files are optional and only read from the pack root when present (n
 | `-q, --quiet` | Suppress stderr summary |
 | `-V, --version` | Print version |
 | `compare [path]` | Naive-dump vs packed table (default budgets: 500, 2000, 0). `--budget` is repeatable. `--ignore` / `--include` / `--max-file-bytes` apply to pack() only |
+| `mcp` | Stdio MCP server (`pack` + `list` tools). Logs to stderr; stdout is protocol-only |
 
 ## For AI coding agents
 
@@ -180,6 +223,8 @@ contextpack pack . --focus auth,jwt --budget 4000 -o context.md
 # See how a naive dump compares to packing (chars/4)
 contextpack compare .
 ```
+
+Prefer MCP when the host supports it (see [Use with agents (MCP)](#use-with-agents-mcp)). The CLI still works when you want a file on disk.
 
 ### Agent setup
 
@@ -269,6 +314,7 @@ The map is the cheap inventory: every discovered candidate, marked `included` / 
 src/
   cli.ts              # Commander CLI
   index.ts            # bin entry
+  mcp/                # contextpack mcp (stdio MCP server)
   init/               # contextpack init (agent drop-in files)
   pack/
     collect.ts        # Walk + gitignore / agent ignores; optional explicit path list
@@ -303,7 +349,7 @@ npm run benchmark
 
 ## Status
 
-**v0.1.16** — `contextpack compare [path]` prints a naive-dump vs packed table for any directory (default budgets 500 / 2000 / unlimited). Same methodology as `npm run benchmark`: characters/4 estimates; naive = every text-ish file with no gitignore, no default ignores, no ranking, no budget. `--budget` is repeatable; `--ignore` / `--include` / `--max-file-bytes` apply to `pack()` only. See [docs/benchmark.md](docs/benchmark.md).
+**v0.1.17** — `contextpack mcp` runs a stdio MCP server with `pack` and `list` tools so agents can get a digest without shelling out. Default root is the process cwd; absolute paths and `..` escapes are rejected. Redaction and project config match the CLI. `compare` stays CLI-only.
 
 ## License
 
