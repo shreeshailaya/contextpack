@@ -24,6 +24,8 @@ const FLAG_LIST = `Key flags (do not invent others):
 - \`--no-redact\` — disable best-effort secret redaction (default on; not a scanner)
 - \`--no-map\` — omit the digest map (no budget reserve; \`--list\` still previews files)
 
+MCP (stdio, no shell-out): \`npx -y -p @shree_vitkar/contextpack contextpack mcp\` exposes \`pack\` and \`list\` tools. Prefer that when the agent host speaks MCP.
+
 Token counts are estimates (characters / 4), not a model tokenizer. Digests include a Map of discovered candidates (included / partial / truncated / skipped); map tokens are reserved from the budget (chars/4).`;
 
 const RECIPES = `Preferred:
@@ -105,7 +107,7 @@ ${PREFERRED_INVOKE}
 - Search-scoped: \`${SEARCH_RECIPE}\`
 - Topic boost: \`${FOCUS_RECIPE}\`
 
-Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--focus\`, \`--format json\`, \`-o\`, \`--no-redact\`, \`--no-map\`. Token counts are estimates (chars/4). The digest Map is reserved from the budget. Secret redaction is best-effort, not a scanner.
+Useful flags: \`--list\`, \`--since\`, \`--diff\`, \`--paths-from -\`, \`--focus\`, \`--format json\`, \`-o\`, \`--no-redact\`, \`--no-map\`. Token counts are estimates (chars/4). The digest Map is reserved from the budget. Secret redaction is best-effort, not a scanner. MCP: \`npx -y -p @shree_vitkar/contextpack contextpack mcp\`.
 ${AGENTS_SECTION_END}
 `;
 
